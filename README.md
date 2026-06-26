@@ -1,4 +1,4 @@
-# ⚔️ AuraBot — Throne and Liberty Dungeon Party Creator
+# 🎲 D20 — Throne and Liberty Dungeon Party Creator
 
 A Discord bot for **Throne and Liberty** that lets players spin up parties and
 recruit **Tanks 🛡️, Healers 💚 and DPS ⚔️** with a clean, interactive UI —
@@ -19,7 +19,7 @@ feature (so everyone sees it in their own timezone, counting down automatically)
   - choose a **difficulty** (Normal / Elite / Epic for dungeons, Normal / Hard for raids)
   - set an optional **minimum Gear Score (CP)** — shown on the party card and enforced
     when players join
-  - pick an optional **voice channel** — rendered as a clickable 🔊 link on the card
+  - paste an optional **voice channel link or ID** — rendered as a clickable 🔊 link on the card
 
 - **Joining** asks each applicant for their **Gear Score (CP)** in a quick popup; it's
   validated against the party's minimum and then displayed next to their name in the roster.

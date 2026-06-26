@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 
 import discord
@@ -152,6 +153,29 @@ def _parse_gear_score(value: str | None) -> int | None:
     return int(cleaned)
 
 
+_CHANNEL_LINK_RE = re.compile(r"channels/\d+/(\d+)")
+
+
+def parse_voice(text: str | None) -> tuple[int | None, str | None]:
+    """Turn a pasted voice link / ID into ``(channel_id, url)``.
+
+    - a Discord channel link (``…/channels/<guild>/<channel>``) → that channel id
+    - a bare numeric channel id → that id
+    - any other http(s) URL → kept as a raw link
+    """
+    if not text:
+        return None, None
+    text = text.strip()
+    m = _CHANNEL_LINK_RE.search(text)
+    if m:
+        return int(m.group(1)), None
+    if text.isdigit():
+        return int(text), None
+    if text.startswith(("http://", "https://")):
+        return None, text
+    return None, None
+
+
 # --------------------------------------------------------------------------- #
 # Join modal — asks the applicant for their Gear Score
 # --------------------------------------------------------------------------- #
@@ -209,12 +233,13 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
 # --------------------------------------------------------------------------- #
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     def __init__(self, activity: str, difficulty: str, gear_score: int | None = None,
-                 voice_channel_id: int | None = None) -> None:
+                 voice_channel_id: int | None = None, voice_link: str | None = None) -> None:
         super().__init__()
         self._activity = activity
         self._difficulty = difficulty
         self._gear_score = gear_score
         self._voice_channel_id = voice_channel_id
+        self._voice_link = voice_link
 
     start_time = discord.ui.TextInput(
         label="Start time (optional)",
@@ -271,6 +296,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             slots=slots,
             min_gear_score=self._gear_score,
             voice_channel_id=self._voice_channel_id,
+            voice_link=self._voice_link,
             start_at=parse_start_time(self.start_time.value),
         )
         # Leader auto-joins the first available role.

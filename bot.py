@@ -1,4 +1,4 @@
-"""AuraBot — Throne and Liberty Dungeon Party Creator.
+"""D20 — Throne and Liberty Dungeon Party Creator.
 
 Entry point. Run with:  python bot.py
 Requires a DISCORD_TOKEN environment variable (see .env.example).
@@ -21,17 +21,17 @@ except ImportError:  # python-dotenv is optional
 
 from src import config
 from src.party import PartyStore
-from src.views import CreatePartyModal, PartyView, set_store, store
+from src.views import CreatePartyModal, PartyView, parse_voice, set_store, store
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("aurabot")
+log = logging.getLogger("d20")
 
 
 # --------------------------------------------------------------------------- #
 # Bot setup
 # --------------------------------------------------------------------------- #
-class AuraBot(commands.Bot):
+class D20Bot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
         # We only use slash commands + interactions, so no privileged intents
@@ -65,7 +65,7 @@ class AuraBot(commands.Bot):
         )
 
 
-bot = AuraBot()
+bot = D20Bot()
 
 
 # --------------------------------------------------------------------------- #
@@ -84,7 +84,7 @@ async def _activity_autocomplete(
     activity="What is the party for? (boss, dungeon, event…)",
     difficulty="Difficulty / vibe of the run",
     gear_score="Minimum Gear Score / Combat Power applicants should have (optional)",
-    voice="Voice channel for the party to gather in (optional)",
+    voice="Paste a voice channel link or ID for the party to gather in (optional)",
 )
 @app_commands.autocomplete(activity=_activity_autocomplete)
 @app_commands.choices(
@@ -95,16 +95,18 @@ async def create(
     activity: str,
     difficulty: app_commands.Choice[str] | None = None,
     gear_score: app_commands.Range[int, 0, 10000] | None = None,
-    voice: discord.VoiceChannel | None = None,
+    voice: str | None = None,
 ):
     diff = difficulty.value if difficulty else "Any"
+    voice_channel_id, voice_link = parse_voice(voice)
     # Open the modal to collect slot counts + notes before posting.
     await interaction.response.send_modal(
         CreatePartyModal(
             activity=activity,
             difficulty=diff,
             gear_score=gear_score,
-            voice_channel_id=voice.id if voice else None,
+            voice_channel_id=voice_channel_id,
+            voice_link=voice_link,
         )
     )
 
@@ -144,7 +146,7 @@ async def parties(interaction: discord.Interaction):
 @bot.tree.command(name="help", description="How to use the party bot.")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="⚔️ AuraBot — Party Creator",
+        title="🎲 D20 — Party Creator",
         description="Find Tanks, Healers and DPS for your Throne and Liberty runs.",
         color=config.Colors.OPEN,
     )

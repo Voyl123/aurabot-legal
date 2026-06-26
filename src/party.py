@@ -43,8 +43,11 @@ class Party:
     # Minimum Gear Score / Combat Power (CP) the leader wants applicants to have.
     # ``None`` means no requirement (informational only — not enforced on join).
     min_gear_score: int | None = None
-    # Voice channel for the party to gather in (rendered as a clickable <#id>).
+    # Voice channel for the party to gather in. If the leader pastes a same-server
+    # channel link/ID we keep the id (rendered as a clickable <#id>); any other URL
+    # is kept verbatim in ``voice_link`` and rendered as a hyperlink.
     voice_channel_id: int | None = None
+    voice_link: str | None = None
     members: list[Member] = field(default_factory=list)
     message_id: int | None = None
     created_at: float = field(default_factory=time.time)
