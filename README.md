@@ -43,9 +43,10 @@ the party's minimum, then shown next to your name. Clicking another role moves y
 
 ### Finding a group & the queue
 - **`/lfg`** — find parties looking for members, optionally filtered by dungeon and/or role.
-- **`/queue`** — queue for a dungeon: if a party is already looking you see it instantly,
-  otherwise you're queued and **pinged the moment a matching party forms**.
-- **`/unqueue`** — leave the queue.
+- **`/queue`** — queue for a specific dungeon **or 🎲 Any dungeon**: if a party is already
+  looking you see it instantly, otherwise you're queued and **auto-added the moment a
+  matching party forms** — open slots fill from the queue **longest-waited first**.
+- **`/myqueue`** — see what you're queued for. **`/unqueue`** — leave the queue.
 - **`/help`** — quick usage guide.
 
 Parties and queues persist to `data/*.json`, and the buttons keep working after a restart.

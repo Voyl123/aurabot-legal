@@ -203,36 +203,53 @@ async def lfg(
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="queue", description="Queue for a dungeon — see matching parties now, or get pinged when one forms.")
+_ANY = "__any__"
+
+
+async def _queue_activity_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    cur = (current or "").lower()
+    choices = [app_commands.Choice(name="🎲 Any dungeon", value=_ANY)]
+    choices += [
+        app_commands.Choice(name=a, value=a)
+        for a in config.ACTIVITIES if cur in a.lower()
+    ]
+    return choices[:25]
+
+
+@bot.tree.command(name="queue", description="Queue for a dungeon (or ANY) — see matching parties now, or get auto-added when one forms.")
 @app_commands.describe(
-    activity="The dungeon/activity you want to run",
+    activity="The dungeon you want — leave blank or pick 'Any dungeon' to match anything",
     role="The role you'll play (optional)",
 )
-@app_commands.autocomplete(activity=_activity_autocomplete)
+@app_commands.autocomplete(activity=_queue_activity_autocomplete)
 @app_commands.choices(role=_ROLE_CHOICES)
 async def queue(
     interaction: discord.Interaction,
-    activity: str,
+    activity: str | None = None,
     role: app_commands.Choice[str] | None = None,
 ):
     role_key = role.value if role else None
     guild_id = interaction.guild_id or 0
+    # Blank / the "Any dungeon" sentinel both mean "match any dungeon".
+    if activity in (None, _ANY) or activity.strip().lower() in ("any", "any dungeon"):
+        activity = None
 
     # First, look through parties already made / looking.
     found = _find_parties(guild_id, activity, role_key)
     if found:
-        embed = discord.Embed(
-            title=f"🔎 Parties already running {activity}",
-            description="Jump in below — no need to wait!",
-            color=config.Colors.ACCENT,
-        )
+        title = f"🔎 Parties already running {activity}" if activity else "🔎 Parties looking for members"
+        embed = discord.Embed(title=title, description="Jump in below — no need to wait!",
+                              color=config.Colors.ACCENT)
         for p in found[:25]:
             name, value = _party_line(p)
             embed.add_field(name=name, value=value, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    # None yet — add them to the queue to be pinged when a party forms.
+    # None yet — add them to the queue. When a matching party forms they get
+    # auto-added, longest-queued first.
     queue_store().add(QueueEntry(
         user_id=interaction.user.id,
         user_name=interaction.user.display_name,
@@ -240,10 +257,11 @@ async def queue(
         activity=activity,
         role=role_key,
     ))
+    what = f"**{activity}**" if activity else "**any dungeon**"
     role_txt = f" as **{config.ROLES[role_key].label}**" if role_key else ""
     await interaction.response.send_message(
-        f"🎟️ You're queued for **{activity}**{role_txt}. I'll ping you the moment a "
-        f"matching party is created. Use `/unqueue` to leave the queue.",
+        f"🎟️ You're queued for {what}{role_txt}. When a matching party forms you'll be "
+        f"**auto-added** (longest-queued first) and pinged. Use `/unqueue` to leave.",
         ephemeral=True,
     )
 
@@ -270,7 +288,8 @@ async def myqueue(interaction: discord.Interaction):
     lines = []
     for e in entries:
         role = f" — {config.ROLES[e.role].emoji} {config.ROLES[e.role].label}" if e.role else ""
-        lines.append(f"• **{e.activity}**{role}")
+        what = e.activity or "🎲 Any dungeon"
+        lines.append(f"• **{what}**{role}")
     embed = discord.Embed(
         title="🎟️ Your queue",
         description="\n".join(lines),
@@ -302,9 +321,9 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="/queue · /myqueue · /unqueue",
-        value="`/queue` a dungeon: if a party's already looking you'll see it instantly — "
-              "otherwise you're queued and **pinged the moment a matching party forms**. "
-              "`/myqueue` shows what you're queued for; `/unqueue` leaves the queue.",
+        value="`/queue` a specific dungeon **or 🎲 Any dungeon**: see matching parties "
+              "instantly, or get **auto-added when one forms** — longest-queued players "
+              "fill the slots first. `/myqueue` shows your queue; `/unqueue` leaves it.",
         inline=False,
     )
     embed.add_field(

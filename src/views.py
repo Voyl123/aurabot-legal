@@ -335,6 +335,9 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
 
         store().add(party)
 
+        # Pull the longest-queued matching players into the open slots.
+        placed = fill_party_from_queue(party)
+
         embed = build_party_embed(party)
         view = PartyView()
         await interaction.response.send_message(
@@ -347,22 +350,44 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         party.message_id = sent.id
         store().save()
 
-        await _notify_queue(interaction, party)
+        if placed:
+            mentions = " ".join(f"<@{uid}>" for uid in placed)
+            await interaction.followup.send(
+                f"🎟️ {mentions} — you were next in the queue and have been added to this "
+                f"**{party.activity}** party! (longest-queued first)",
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
 
 
-async def _notify_queue(interaction: discord.Interaction, party: Party) -> None:
-    """Ping anyone queued for this party's dungeon(s), then clear them."""
-    if _queue is None:
-        return
-    open_roles = {r for r in party.slots if party.open_slots(r) > 0}
-    matched = queue_store().matches(party.guild_id, party.all_activities, open_roles)
-    # Don't ping the party leader about their own party.
-    matched = [e for e in matched if e.user_id != party.leader_id]
-    if not matched:
-        return
-    queue_store().remove_entries(matched)
-    mentions = " ".join(f"<@{uid}>" for uid in dict.fromkeys(e.user_id for e in matched))
-    await interaction.followup.send(
-        f"🔔 {mentions} — a party for **{party.activity}** just formed! Jump in above. ⬆️",
-        allowed_mentions=discord.AllowedMentions(users=True),
-    )
+def fill_party_from_queue(party: Party) -> list[int]:
+    """Fill the party's open slots from the queue, longest-queued players first.
+
+    A queued player is placed into their requested role if it has space,
+    otherwise (for "any role" entries) into the first open role. Placed players
+    are removed from the queue. Returns the list of user ids that were added.
+    """
+    if _queue is None or party.closed:
+        return []
+
+    placed_entries = []
+    for entry in queue_store().candidates(party.guild_id, party.all_activities):
+        if party.is_full:
+            break
+        if entry.user_id == party.leader_id or party.find_member(entry.user_id):
+            continue
+        if entry.role and party.open_slots(entry.role) > 0:
+            role = entry.role
+        elif entry.role is None:
+            role = next((r for r in config.ROLE_ORDER if party.open_slots(r) > 0), None)
+        else:
+            role = None  # wanted a specific role that's already full
+        if role is None:
+            continue
+        changed, _ = party.add_or_move(entry.user_id, entry.user_name, role)
+        if changed:
+            placed_entries.append(entry)
+
+    if placed_entries:
+        queue_store().remove_entries(placed_entries)
+        store().save()
+    return [e.user_id for e in placed_entries]

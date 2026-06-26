@@ -1,6 +1,5 @@
 """Tests for the party queue store, matching, and create-time notifications."""
 
-import asyncio
 import tempfile
 
 from src import views
@@ -20,23 +19,22 @@ def test_add_replaces_same_user_activity():
     assert len(entries) == 1 and entries[0].role == "tank"
 
 
-def test_matches_by_activity_and_role():
+def test_candidates_match_activity_or_any_longest_first():
     q = _store()
-    q.add(QueueEntry(1, "Tank", 100, "Dungeon X", "tank"))
-    q.add(QueueEntry(2, "Dps", 100, "Dungeon X", "dps"))
-    q.add(QueueEntry(3, "Any", 100, "Dungeon X", None))
-    q.add(QueueEntry(4, "Other", 100, "Dungeon Y", "dps"))
+    q.add(QueueEntry(1, "Old", 100, "Dungeon X", "dps", created_at=100))
+    q.add(QueueEntry(2, "AnyDungeon", 100, None, "tank", created_at=200))
+    q.add(QueueEntry(3, "OtherDungeon", 100, "Dungeon Y", "dps", created_at=150))
+    q.add(QueueEntry(4, "New", 100, "Dungeon X", "healer", created_at=300))
 
-    # A party for X with only DPS open matches the dps-seeker and the any-seeker.
-    matched = q.matches(100, ["Dungeon X"], open_roles={"dps"})
-    ids = {e.user_id for e in matched}
-    assert ids == {2, 3}
+    cands = q.candidates(100, ["Dungeon X"])
+    # Dungeon Y is excluded; the rest are ordered oldest-first by created_at.
+    assert [e.user_id for e in cands] == [1, 2, 4]
 
 
-def test_matches_respects_guild():
+def test_candidates_respect_guild():
     q = _store()
     q.add(QueueEntry(1, "A", 100, "Dungeon X", "dps"))
-    assert q.matches(999, ["Dungeon X"], {"dps"}) == []
+    assert q.candidates(999, ["Dungeon X"]) == []
 
 
 def test_remove_user():
@@ -63,58 +61,66 @@ def test_for_user_scoped_to_guild():
 
 
 # --------------------------------------------------------------------------- #
-# Create-time notification
+# Auto-fill on party creation (longest-queued first)
 # --------------------------------------------------------------------------- #
-class _Followup:
-    def __init__(self):
-        self.msgs = []
-
-    async def send(self, content=None, **kwargs):
-        self.msgs.append(content)
-
-
-class _Interaction:
-    def __init__(self):
-        self.followup = _Followup()
+def _wire():
+    views.set_store(PartyStore(tempfile.mktemp(suffix=".json")))
+    q = _store()
+    views.set_queue_store(q)
+    return q
 
 
-def test_notify_queue_pings_and_clears_matched():
-    async def run():
-        views.set_store(PartyStore(tempfile.mktemp(suffix=".json")))
-        q = _store()
-        views.set_queue_store(q)
-        q.add(QueueEntry(20, "Waiting", 1, "Dungeon X", "dps"))
-        q.add(QueueEntry(99, "Leader", 1, "Dungeon X", "dps"))  # also the leader
-
-        party = Party(
-            party_id="P", guild_id=1, channel_id=2, leader_id=99, leader_name="Leader",
-            activity="Dungeon X", difficulty="Normal", notes="", slots={"dps": 4},
-        )
-        party.add_or_move(99, "Leader", "dps")
-
-        interaction = _Interaction()
-        await views._notify_queue(interaction, party)
-
-        # The waiting DPS got pinged; the leader did not get pinged about their own party.
-        assert interaction.followup.msgs and "<@20>" in interaction.followup.msgs[0]
-        assert "<@99>" not in interaction.followup.msgs[0]
-        # Matched entry was cleared from the queue.
-        assert q.for_user(20, 1) == []
-    asyncio.run(run())
+def _party(slots, **kw):
+    return Party(
+        party_id="P", guild_id=1, channel_id=2, leader_id=99, leader_name="Leader",
+        activity="Dungeon X", difficulty="Normal", notes="", slots=slots, **kw,
+    )
 
 
-def test_notify_queue_silent_when_no_match():
-    async def run():
-        views.set_store(PartyStore(tempfile.mktemp(suffix=".json")))
-        q = _store()
-        views.set_queue_store(q)
-        q.add(QueueEntry(20, "W", 1, "Dungeon Y", "dps"))  # different dungeon
+def test_fill_places_longest_queued_first_and_clears_them():
+    q = _wire()
+    q.add(QueueEntry(10, "First", 1, "Dungeon X", "dps", created_at=100))
+    q.add(QueueEntry(11, "Second", 1, "Dungeon X", "dps", created_at=200))
+    q.add(QueueEntry(12, "Third", 1, "Dungeon X", "dps", created_at=300))
+    q.add(QueueEntry(99, "Leader", 1, "Dungeon X", "dps", created_at=50))  # the leader
 
-        party = Party(
-            party_id="P", guild_id=1, channel_id=2, leader_id=99, leader_name="L",
-            activity="Dungeon X", difficulty="Normal", notes="", slots={"dps": 4},
-        )
-        interaction = _Interaction()
-        await views._notify_queue(interaction, party)
-        assert interaction.followup.msgs == []
-    asyncio.run(run())
+    party = _party({"dps": 2})
+    party.add_or_move(99, "Leader", "dps")  # leader takes one of two dps slots
+
+    placed = views.fill_party_from_queue(party)
+
+    # Only one dps slot was open → the oldest non-leader queuer (user 10) fills it.
+    assert placed == [10]
+    assert party.find_member(10) is not None
+    assert party.find_member(11) is None       # no room
+    assert q.for_user(10, 1) == []             # cleared from queue
+    assert {e.user_id for e in q.all()} == {11, 12, 99}
+
+
+def test_fill_respects_requested_role_and_any():
+    q = _wire()
+    q.add(QueueEntry(10, "TankSeeker", 1, "Dungeon X", "tank", created_at=100))
+    q.add(QueueEntry(11, "AnyRole", 1, None, None, created_at=200))  # any dungeon, any role
+
+    party = _party({"tank": 1, "healer": 1})
+    placed = views.fill_party_from_queue(party)
+
+    assert set(placed) == {10, 11}
+    assert party.find_member(10).role == "tank"
+    assert party.find_member(11).role == "healer"  # any-role took the remaining slot
+
+
+def test_fill_skips_specific_role_when_full():
+    q = _wire()
+    q.add(QueueEntry(10, "Wants tank", 1, "Dungeon X", "tank", created_at=100))
+    party = _party({"tank": 1, "dps": 2})
+    party.add_or_move(99, "Leader", "tank")  # tank already full
+
+    placed = views.fill_party_from_queue(party)
+    assert placed == []  # wanted tank specifically, none open
+
+
+def test_fill_returns_empty_when_no_candidates():
+    _wire()
+    party = _party({"dps": 4})
+    assert views.fill_party_from_queue(party) == []
