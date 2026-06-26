@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 
 
 _REL_RE = re.compile(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?", re.IGNORECASE)
+_DURATION_RE = re.compile(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?", re.IGNORECASE)
 _CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*(am|pm)?$", re.IGNORECASE)
 # A Discord timestamp tag as produced by sesh.fyi: <t:1750005400:F>
 _TAG_RE = re.compile(r"<t:(\d+)(?::[a-z])?>", re.IGNORECASE)
@@ -77,3 +78,34 @@ def parse_start_time(text: str | None, now: float | None = None) -> float | None
             return base + hours * 3600 + minutes * 60
 
     return None
+
+
+def parse_duration(text: str | None) -> int | None:
+    """Parse a "how long" string into seconds.
+
+    Supports ``2h``, ``90m``, ``1h30m`` and a bare number (minutes). Returns
+    ``None`` for empty / unparseable input.
+    """
+    if not text:
+        return None
+    text = text.strip().lower()
+    if text.isdigit():  # bare number → minutes
+        minutes = int(text)
+        return minutes * 60 if minutes > 0 else None
+    m = _DURATION_RE.fullmatch(text.replace(" ", ""))
+    if m and (m.group(1) or m.group(2)):
+        seconds = int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60
+        return seconds or None
+    return None
+
+
+def humanize_duration(seconds: int | None) -> str:
+    """Render seconds as a short human string, e.g. ``2h``, ``1h30m``, ``45m``."""
+    if not seconds or seconds <= 0:
+        return ""
+    hours, minutes = divmod(seconds // 60, 60)
+    if hours and minutes:
+        return f"{hours}h{minutes}m"
+    if hours:
+        return f"{hours}h"
+    return f"{minutes}m"

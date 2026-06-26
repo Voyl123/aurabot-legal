@@ -25,6 +25,7 @@ class Member:
     user_id: int
     display_name: str
     role: str  # one of config.ROLES keys
+    gear_score: int | None = None  # the member's own Gear Score / CP
 
 
 @dataclass
@@ -34,11 +35,23 @@ class Party:
     channel_id: int
     leader_id: int
     leader_name: str
-    activity: str
+    activity: str  # the primary dungeon / activity (used as the card title)
     difficulty: str
     notes: str
     # role key -> max slots for that role
     slots: dict[str, int]
+    # Minimum Gear Score / Combat Power (CP) the leader wants applicants to have.
+    # ``None`` means no requirement (informational only — not enforced on join).
+    min_gear_score: int | None = None
+    # Voice channel for the party to gather in. If the leader pastes a same-server
+    # channel link/ID we keep the id (rendered as a clickable <#id>); any other URL
+    # is kept verbatim in ``voice_link`` and rendered as a hyperlink.
+    voice_channel_id: int | None = None
+    voice_link: str | None = None
+    # Additional dungeons this party also wants to run (besides ``activity``).
+    extra_activities: list[str] = field(default_factory=list)
+    # How long the party plans to run, in seconds (None = open-ended).
+    duration_seconds: int | None = None
     members: list[Member] = field(default_factory=list)
     message_id: int | None = None
     created_at: float = field(default_factory=time.time)
@@ -58,6 +71,35 @@ class Party:
     def is_full(self) -> bool:
         return self.size >= self.capacity
 
+    @property
+    def all_activities(self) -> list[str]:
+        """The primary activity plus any extra dungeons, de-duplicated."""
+        seen: list[str] = []
+        for a in [self.activity, *self.extra_activities]:
+            if a and a not in seen:
+                seen.append(a)
+        return seen
+
+    @property
+    def end_at(self) -> float | None:
+        """When the party is scheduled to wrap up, if a duration was set."""
+        if self.duration_seconds is None:
+            return None
+        return (self.start_at or self.created_at) + self.duration_seconds
+
+    @property
+    def is_expired(self) -> bool:
+        end = self.end_at
+        return end is not None and time.time() > end
+
+    def wants(self, activity: str) -> bool:
+        """True if this party is running the given activity."""
+        return activity in self.all_activities
+
+    @property
+    def has_open_slot(self) -> bool:
+        return any(self.open_slots(r) > 0 for r in self.slots)
+
     def members_for(self, role: str) -> list[Member]:
         return [m for m in self.members if m.role == role]
 
@@ -68,7 +110,9 @@ class Party:
         return next((m for m in self.members if m.user_id == user_id), None)
 
     # -- mutations ---------------------------------------------------------- #
-    def add_or_move(self, user_id: int, display_name: str, role: str) -> tuple[bool, str]:
+    def add_or_move(
+        self, user_id: int, display_name: str, role: str, gear_score: int | None = None
+    ) -> tuple[bool, str]:
         """Add a member, or move them to a new role.
 
         Returns ``(changed, message)``.
@@ -87,9 +131,11 @@ class Party:
 
         if existing:
             existing.role = role
+            if gear_score is not None:
+                existing.gear_score = gear_score
             return True, f"Moved you to **{config.ROLES[role].label}**."
 
-        self.members.append(Member(user_id, display_name, role))
+        self.members.append(Member(user_id, display_name, role, gear_score))
         return True, f"You joined as **{config.ROLES[role].label}**."
 
     def remove(self, user_id: int) -> tuple[bool, str]:
