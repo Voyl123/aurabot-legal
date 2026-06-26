@@ -11,8 +11,14 @@ feature (so everyone sees it in their own timezone, counting down automatically)
 ## Features
 
 - **`/create`** — opens a form to build a party:
-  - choose the **activity** (open-world boss, dungeon, GvG, …) via autocomplete
-  - choose a **difficulty / vibe**
+  - choose the **activity** via autocomplete — the full Throne and Liberty lineup:
+    the **Altar of Calanthia** 12-player raid, every **1★ / 2★ / 3★ co-op dungeon**
+    (Syleus's Abyss → Doomrot Grove), the **5500 CP** endgame dungeons
+    (Hellfire Crucible, Deathless Queen's Lair), **archbosses** (Bellandir, Tevent,
+    Deluzhnoa, Giant Cordy), field bosses, guild raids and PvP
+  - choose a **difficulty** (Normal / Elite / Epic for dungeons, Normal / Hard for raids)
+  - set an optional **minimum Gear Score (CP)** — shown on the party card so applicants
+    know the requirement at a glance
   - set how many **Tank / Healer / DPS** slots you need (defaults to the classic
     1 / 1 / 4 six-stack)
   - add **notes** (CP requirements, voice, etc.)

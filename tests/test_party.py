@@ -85,3 +85,20 @@ def test_embed_shows_timestamp_and_roster():
     assert any("Tank" in n for n in field_names)
     assert any("Looking for" in n for n in field_names)
     assert any("Notes" in n for n in field_names)
+
+
+def test_embed_shows_gear_score_when_set():
+    p = make_party(min_gear_score=4000)
+    assert "4,000+ CP" in build_party_embed(p).description
+
+
+def test_embed_omits_gear_score_when_unset():
+    p = make_party()
+    assert "CP required" not in build_party_embed(p).description
+
+
+def test_gear_score_persists():
+    p = make_party(min_gear_score=3500)
+    path = tempfile.mktemp(suffix=".json")
+    PartyStore(path).add(p)
+    assert PartyStore(path).get("P1").min_gear_score == 3500

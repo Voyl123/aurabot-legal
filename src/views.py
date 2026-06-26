@@ -132,10 +132,11 @@ def _is_manager(interaction: discord.Interaction) -> bool:
 # Create-party modal
 # --------------------------------------------------------------------------- #
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
-    def __init__(self, activity: str, difficulty: str) -> None:
+    def __init__(self, activity: str, difficulty: str, gear_score: int | None = None) -> None:
         super().__init__()
         self._activity = activity
         self._difficulty = difficulty
+        self._gear_score = gear_score
 
     start_time = discord.ui.TextInput(
         label="Start time (optional)",
@@ -190,6 +191,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             difficulty=self._difficulty,
             notes=(self.notes.value or "").strip(),
             slots=slots,
+            min_gear_score=self._gear_score,
             start_at=parse_start_time(self.start_time.value),
         )
         # Leader auto-joins the first available role.

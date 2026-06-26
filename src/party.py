@@ -39,6 +39,9 @@ class Party:
     notes: str
     # role key -> max slots for that role
     slots: dict[str, int]
+    # Minimum Gear Score / Combat Power (CP) the leader wants applicants to have.
+    # ``None`` means no requirement (informational only — not enforced on join).
+    min_gear_score: int | None = None
     members: list[Member] = field(default_factory=list)
     message_id: int | None = None
     created_at: float = field(default_factory=time.time)

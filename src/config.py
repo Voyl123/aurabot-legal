@@ -35,23 +35,57 @@ ROLE_ORDER: list[str] = ["tank", "healer", "dps"]
 # --------------------------------------------------------------------------- #
 # Activities (what the party is actually for)
 # --------------------------------------------------------------------------- #
-# Used to populate the autocomplete / dropdown in the /create flow.
+# Used to populate the autocomplete in the /create flow. Grouped by content
+# type and ordered roughly by the Combat Power (CP) needed to enter, so the
+# list doubles as a quick gear-check reference. The ★ count is the in-game
+# Dimensional Circle difficulty tier.
 ACTIVITIES: list[str] = [
-    "Open World Boss",
-    "Field Boss",
-    "Archboss",
-    "Dungeon — Syleus's Abyss",
-    "Dungeon — Cave of Destruction",
-    "Dungeon — Temple of Slaughter",
-    "Dungeon — Saurodoma Island",
-    "Dungeon — Carmine Vault",
-    "Dungeon — Shattered Temple",
-    "Tax Delivery Run",
-    "Guild / GvG Event",
-    "Arena / PvP",
-    "Riftstone Contract",
-    "Co-op Dungeon (any)",
-    "Custom / Other",
+    # ---- 12-player Raids -------------------------------------------------- #
+    "⚔️ Raid — Altar of Calanthia (12p · 5000+ CP)",
+
+    # ---- 1-Star Co-op Dungeons (1600 CP) ---------------------------------- #
+    "★ Syleus's Abyss (1-Star)",
+    "★ Saurodoma Island (1-Star)",
+    "★ Temple of Slaughter (1-Star)",
+    "★ Butcher's Canyon (1-Star)",
+    "★ Cave of Destruction (1-Star)",
+    "★ Shattered Temple (1-Star)",
+
+    # ---- 2-Star Co-op Dungeons (2500 CP) ---------------------------------- #
+    "★★ Carmine Rage Island (2-Star)",
+    "★★ Island of Terror (2-Star)",
+    "★★ Valley of Slaughter (2-Star)",
+    "★★ Voidwastes (2-Star)",
+    "★★ Torture Chamber of Screams (2-Star)",
+
+    # ---- 3-Star Co-op Dungeons (3500 CP · Lv55) --------------------------- #
+    "★★★ Tyrant's Isle (3-Star)",
+    "★★★ Twisted Laboratory (3-Star)",
+    "★★★ Rancorwood (3-Star)",
+    "★★★ Halls of Tragedy (3-Star)",
+    "★★★ Chapel of Madness (3-Star)",
+    "★★★ Doomrot Grove (3-Star)",
+
+    # ---- Endgame Co-op (5500 CP) ------------------------------------------ #
+    "🔥 Hellfire Crucible (5500 CP)",
+    "🔥 Deathless Queen's Lair (5500 CP)",
+
+    # ---- Archbosses & world content --------------------------------------- #
+    "👑 Archboss — Queen Bellandir",
+    "👑 Archboss — Courte's Wraith Tevent",
+    "👑 Archboss — Deluzhnoa",
+    "👑 Archboss — Giant Cordy",
+    "👑 Ascended Archboss",
+    "🌍 Field Boss",
+    "🌍 Open World Boss",
+    "🏰 Guild Raid Boss",
+
+    # ---- PvP / misc ------------------------------------------------------- #
+    "🚚 Tax Delivery Run",
+    "⚔️ GvG / Guild War",
+    "🏹 Arena / PvP",
+    "🗺️ Battlegrounds",
+    "❓ Custom / Other",
 ]
 
 
@@ -66,5 +100,13 @@ class Colors:
     ACCENT = 0xFEE75C    # yellow    — info / accents
 
 
-# Difficulty options offered when creating a party.
-DIFFICULTIES: list[str] = ["Normal", "Hard", "Any", "Learning / Chill"]
+# Difficulty options offered when creating a party. Co-op dungeons use
+# Normal / Elite / Epic; the 12-player raid uses Normal / Hard.
+DIFFICULTIES: list[str] = [
+    "Normal",
+    "Elite",
+    "Epic",
+    "Hard",
+    "Any",
+    "Learning / Chill",
+]

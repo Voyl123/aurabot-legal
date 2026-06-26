@@ -39,6 +39,8 @@ def build_party_embed(party: Party) -> discord.Embed:
         f"**Difficulty:** {party.difficulty}",
         f"**Status:** {status}",
     ]
+    if party.min_gear_score:
+        description_lines.append(f"**Gear Score:** ⚡ {party.min_gear_score:,}+ CP required")
     if party.start_at:
         ts = int(party.start_at)
         # Discord timestamp markdown renders in each viewer's local timezone:

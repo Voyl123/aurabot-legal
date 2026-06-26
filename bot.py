@@ -83,6 +83,7 @@ async def _activity_autocomplete(
 @app_commands.describe(
     activity="What is the party for? (boss, dungeon, event…)",
     difficulty="Difficulty / vibe of the run",
+    gear_score="Minimum Gear Score / Combat Power applicants should have (optional)",
 )
 @app_commands.autocomplete(activity=_activity_autocomplete)
 @app_commands.choices(
@@ -92,10 +93,13 @@ async def create(
     interaction: discord.Interaction,
     activity: str,
     difficulty: app_commands.Choice[str] | None = None,
+    gear_score: app_commands.Range[int, 0, 10000] | None = None,
 ):
     diff = difficulty.value if difficulty else "Any"
     # Open the modal to collect slot counts + notes before posting.
-    await interaction.response.send_modal(CreatePartyModal(activity=activity, difficulty=diff))
+    await interaction.response.send_modal(
+        CreatePartyModal(activity=activity, difficulty=diff, gear_score=gear_score)
+    )
 
 
 @bot.tree.command(name="parties", description="List the parties currently recruiting in this server.")
@@ -121,8 +125,9 @@ async def parties(interaction: discord.Interaction):
             for r in config.ROLE_ORDER if p.open_slots(r) > 0
         )
         link = f"https://discord.com/channels/{p.guild_id}/{p.channel_id}/{p.message_id}"
+        gs = f" • ⚡ {p.min_gear_score:,}+ CP" if p.min_gear_score else ""
         embed.add_field(
-            name=f"{p.activity} ({p.difficulty}) — {p.size}/{p.capacity}",
+            name=f"{p.activity} ({p.difficulty}) — {p.size}/{p.capacity}{gs}",
             value=f"Needs: {needs or '—'}\n[Jump to party]({link})",
             inline=False,
         )
@@ -138,8 +143,9 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="/create",
-        value="Start a new party. Pick an activity & difficulty, set how many of "
-              "each role you need, and the bot posts a live party card with join buttons.",
+        value="Start a new party. Pick an activity (raids, 1★–3★ dungeons, archbosses…), "
+              "a difficulty, and an optional **minimum Gear Score (CP)**. Then set how "
+              "many of each role you need and the bot posts a live party card with join buttons.",
         inline=False,
     )
     embed.add_field(
