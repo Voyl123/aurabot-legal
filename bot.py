@@ -22,6 +22,7 @@ except ImportError:  # python-dotenv is optional
 from src import config
 from src.party import PartyStore
 from src.queues import QueueEntry, QueueStore
+from src.weapons import parse_weapons
 from src.views import (
     CreatePartyModal,
     PartyView,
@@ -114,10 +115,14 @@ async def _activity_autocomplete(
     difficulty="Difficulty / vibe of the run",
     gear_score="Minimum Gear Score / Combat Power applicants should have (optional)",
     voice="Paste a voice channel link or ID for the party to gather in (optional)",
+    weapons="Your weapon combo, e.g. GS / Dagger — sets your class title (optional)",
+    runs="How many runs / clears you want to do (optional)",
+    spec="A spec you specifically need — leave blank if you don't mind (optional)",
 )
 @app_commands.autocomplete(activity=_activity_autocomplete)
 @app_commands.choices(
-    difficulty=[app_commands.Choice(name=d, value=d) for d in config.DIFFICULTIES]
+    difficulty=[app_commands.Choice(name=d, value=d) for d in config.DIFFICULTIES],
+    spec=[app_commands.Choice(name=s, value=s) for s in config.SPECS],
 )
 async def create(
     interaction: discord.Interaction,
@@ -125,6 +130,9 @@ async def create(
     difficulty: app_commands.Choice[str] | None = None,
     gear_score: app_commands.Range[int, 0, 10000] | None = None,
     voice: str | None = None,
+    weapons: str | None = None,
+    runs: app_commands.Range[int, 1, 99] | None = None,
+    spec: app_commands.Choice[str] | None = None,
 ):
     diff = difficulty.value if difficulty else "Any"
     voice_channel_id, voice_link = parse_voice(voice)
@@ -136,6 +144,9 @@ async def create(
             gear_score=gear_score,
             voice_channel_id=voice_channel_id,
             voice_link=voice_link,
+            leader_weapons=parse_weapons(weapons),
+            runs=runs,
+            required_spec=spec.value if spec else None,
         )
     )
 
@@ -168,9 +179,11 @@ def _party_line(p) -> tuple[str, str]:
     )
     link = f"https://discord.com/channels/{p.guild_id}/{p.channel_id}/{p.message_id}"
     gs = f" • ⚡ {p.min_gear_score:,}+ CP" if p.min_gear_score else ""
+    # Discord timestamp → shown in each viewer's own timezone, with a countdown.
+    when = f"\n🕒 starts <t:{int(p.start_at)}:R>" if p.start_at else ""
     return (
         f"{p.activity} ({p.difficulty}) — {p.size}/{p.capacity}{gs}",
-        f"Needs: {needs or '—'}\n[Jump to party]({link})",
+        f"Needs: {needs or '—'}{when}\n[Jump to party]({link})",
     )
 
 
@@ -203,36 +216,53 @@ async def lfg(
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="queue", description="Queue for a dungeon — see matching parties now, or get pinged when one forms.")
+_ANY = "__any__"
+
+
+async def _queue_activity_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    cur = (current or "").lower()
+    choices = [app_commands.Choice(name="🎲 Any dungeon", value=_ANY)]
+    choices += [
+        app_commands.Choice(name=a, value=a)
+        for a in config.ACTIVITIES if cur in a.lower()
+    ]
+    return choices[:25]
+
+
+@bot.tree.command(name="queue", description="Queue for a dungeon (or ANY) — see matching parties now, or get auto-added when one forms.")
 @app_commands.describe(
-    activity="The dungeon/activity you want to run",
+    activity="The dungeon you want — leave blank or pick 'Any dungeon' to match anything",
     role="The role you'll play (optional)",
 )
-@app_commands.autocomplete(activity=_activity_autocomplete)
+@app_commands.autocomplete(activity=_queue_activity_autocomplete)
 @app_commands.choices(role=_ROLE_CHOICES)
 async def queue(
     interaction: discord.Interaction,
-    activity: str,
+    activity: str | None = None,
     role: app_commands.Choice[str] | None = None,
 ):
     role_key = role.value if role else None
     guild_id = interaction.guild_id or 0
+    # Blank / the "Any dungeon" sentinel both mean "match any dungeon".
+    if activity in (None, _ANY) or activity.strip().lower() in ("any", "any dungeon"):
+        activity = None
 
     # First, look through parties already made / looking.
     found = _find_parties(guild_id, activity, role_key)
     if found:
-        embed = discord.Embed(
-            title=f"🔎 Parties already running {activity}",
-            description="Jump in below — no need to wait!",
-            color=config.Colors.ACCENT,
-        )
+        title = f"🔎 Parties already running {activity}" if activity else "🔎 Parties looking for members"
+        embed = discord.Embed(title=title, description="Jump in below — no need to wait!",
+                              color=config.Colors.ACCENT)
         for p in found[:25]:
             name, value = _party_line(p)
             embed.add_field(name=name, value=value, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    # None yet — add them to the queue to be pinged when a party forms.
+    # None yet — add them to the queue. When a matching party forms they get
+    # auto-added, longest-queued first.
     queue_store().add(QueueEntry(
         user_id=interaction.user.id,
         user_name=interaction.user.display_name,
@@ -240,10 +270,11 @@ async def queue(
         activity=activity,
         role=role_key,
     ))
+    what = f"**{activity}**" if activity else "**any dungeon**"
     role_txt = f" as **{config.ROLES[role_key].label}**" if role_key else ""
     await interaction.response.send_message(
-        f"🎟️ You're queued for **{activity}**{role_txt}. I'll ping you the moment a "
-        f"matching party is created. Use `/unqueue` to leave the queue.",
+        f"🎟️ You're queued for {what}{role_txt}. When a matching party forms you'll be "
+        f"**auto-added** (longest-queued first) and pinged. Use `/unqueue` to leave.",
         ephemeral=True,
     )
 
@@ -258,6 +289,29 @@ async def unqueue(interaction: discord.Interaction):
     await interaction.response.send_message(msg, ephemeral=True)
 
 
+@bot.tree.command(name="myqueue", description="See the dungeons you're currently queued for.")
+async def myqueue(interaction: discord.Interaction):
+    entries = queue_store().for_user(interaction.user.id, interaction.guild_id or 0)
+    if not entries:
+        await interaction.response.send_message(
+            "You're not queued for anything. Use `/queue` to join one. 🎟️",
+            ephemeral=True,
+        )
+        return
+    lines = []
+    for e in entries:
+        role = f" — {config.ROLES[e.role].emoji} {config.ROLES[e.role].label}" if e.role else ""
+        what = e.activity or "🎲 Any dungeon"
+        lines.append(f"• **{what}**{role}")
+    embed = discord.Embed(
+        title="🎟️ Your queue",
+        description="\n".join(lines),
+        color=config.Colors.ACCENT,
+    )
+    embed.set_footer(text="Use /unqueue to leave them all.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="help", description="How to use the party bot.")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -268,9 +322,9 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="/create",
         value="Start a party. Pick an activity (raids, T1–T3 dungeons, archbosses…), a "
-              "difficulty, an optional **min Gear Score (CP)** and a **voice link**. In the "
-              "form you can set roles, a **start time**, how long it's **running for**, and "
-              "**other dungeons** you'll also run. The bot posts a live party card.",
+              "difficulty, optional **min Gear Score**, **voice link**, **# of runs** and a "
+              "**spec** you need (or leave blank for any). In the form: roles, **start time**, "
+              "how long it's **running for**, **other dungeons**, and notes. Posts a live card.",
         inline=False,
     )
     embed.add_field(
@@ -279,17 +333,18 @@ async def help_command(interaction: discord.Interaction):
         inline=False,
     )
     embed.add_field(
-        name="/queue · /unqueue",
-        value="`/queue` a dungeon: if a party's already looking you'll see it instantly — "
-              "otherwise you're queued and **pinged the moment a matching party forms**. "
-              "`/unqueue` leaves the queue.",
+        name="/queue · /myqueue · /unqueue",
+        value="`/queue` a specific dungeon **or 🎲 Any dungeon**: see matching parties "
+              "instantly, or get **auto-added when one forms** — longest-queued players "
+              "fill the slots first. `/myqueue` shows your queue; `/unqueue` leaves it.",
         inline=False,
     )
     embed.add_field(
         name="Joining & leaving",
-        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card — you'll be asked "
-              "for your **Gear Score (CP)**, which shows next to your name. Click 🚪 **Leave** "
-              "any time to drop out. The leader can 🔒 **Disband**.",
+        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card. You must set your "
+              "**Gear Score**, **weapons** (e.g. `GS / Dagger` → class title *Bladedancer*) and "
+              "one or more **spec preferences** (e.g. `DPS, PvE`) — all shown next to your name. "
+              "Click 🚪 **Leave** any time. The leader can 🔒 **Disband**.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)

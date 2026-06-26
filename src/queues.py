@@ -22,8 +22,8 @@ class QueueEntry:
     user_id: int
     user_name: str
     guild_id: int
-    activity: str
-    role: str | None = None  # tank / healer / dps, or None for "any role"
+    activity: str | None = None  # a specific dungeon, or None for "any dungeon"
+    role: str | None = None      # tank / healer / dps, or None for "any role"
     created_at: float = 0.0
 
     def __post_init__(self) -> None:
@@ -90,23 +90,19 @@ class QueueStore:
     def for_user(self, user_id: int, guild_id: int) -> list[QueueEntry]:
         return [e for e in self._entries if e.user_id == user_id and e.guild_id == guild_id]
 
-    def matches(self, guild_id: int, activities: list[str], open_roles: set[str]) -> list[QueueEntry]:
-        """Queue entries that a newly-formed party would satisfy.
+    def candidates(self, guild_id: int, activities: list[str]) -> list[QueueEntry]:
+        """Entries eligible for a party running ``activities``, longest-queued first.
 
-        ``open_roles`` is the set of role keys that still have space (plus the
-        catch-all: an entry with ``role=None`` matches as long as *some* role
-        is open).
+        An entry matches when it's in the same guild and either targets one of
+        the party's dungeons or is an "any dungeon" entry (``activity is None``).
+        Sorted by ``created_at`` ascending so the player who has waited the
+        longest is placed first.
         """
-        any_open = bool(open_roles)
-        out: list[QueueEntry] = []
-        for e in self._entries:
-            if e.guild_id != guild_id or e.activity not in activities:
-                continue
-            if e.role is None and any_open:
-                out.append(e)
-            elif e.role in open_roles:
-                out.append(e)
-        return out
+        out = [
+            e for e in self._entries
+            if e.guild_id == guild_id and (e.activity is None or e.activity in activities)
+        ]
+        return sorted(out, key=lambda e: e.created_at)
 
     def all(self) -> list[QueueEntry]:
         return list(self._entries)

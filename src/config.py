@@ -110,3 +110,15 @@ DIFFICULTIES: list[str] = [
     "Any",
     "Learning / Chill",
 ]
+
+# Specs / playstyles a party can ask for, and that players list as preferences.
+# A party with no spec set means "don't mind".
+SPECS: list[str] = [
+    "Tank",
+    "Healer",
+    "DPS",
+    "Bomber",
+    "Support",
+    "PvP",
+    "PvE",
+]

@@ -12,6 +12,7 @@ import datetime as dt
 import discord
 
 from . import config
+from . import weapons as weapons_mod
 from .party import Party
 from .timeparse import humanize_duration
 
@@ -30,8 +31,16 @@ def _roster_block(party: Party, role_key: str) -> str:
     lines: list[str] = []
     for m in party.members_for(role_key):
         crown = "👑 " if m.user_id == party.leader_id else ""
-        gs = f" · `{m.gear_score:,}`" if m.gear_score else ""
-        lines.append(f"{crown}<@{m.user_id}>{gs}")
+        extras = []
+        title = weapons_mod.class_title(m.weapons)
+        if title:
+            extras.append(title)
+        if m.specs:
+            extras.append("/".join(m.specs))
+        if m.gear_score:
+            extras.append(f"`{m.gear_score:,}`")
+        suffix = (" · " + " · ".join(extras)) if extras else ""
+        lines.append(f"{crown}<@{m.user_id}>{suffix}")
     for _ in range(party.open_slots(role_key)):
         lines.append("`+ open`")
     return "\n".join(lines) if lines else "`—`"
@@ -59,6 +68,9 @@ def build_party_embed(party: Party) -> discord.Embed:
     meta = [f"🎮 {party.difficulty}"]
     if party.min_gear_score:
         meta.append(f"⚡ {party.min_gear_score:,}+ CP")
+    meta.append(f"🧭 {party.required_spec}" if party.required_spec else "🧭 any spec")
+    if party.runs:
+        meta.append(f"🔁 {party.runs} run{'s' if party.runs != 1 else ''}")
     if party.voice_channel_id:
         meta.append(f"🔊 <#{party.voice_channel_id}>")
     elif party.voice_link:

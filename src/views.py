@@ -10,6 +10,7 @@ import discord
 from . import config
 from .embeds import build_party_embed
 from .party import Party, PartyStore
+from . import weapons as weapons_mod
 from .queues import QueueStore
 from .timeparse import parse_duration, parse_start_time
 
@@ -165,6 +166,28 @@ def _parse_gear_score(value: str | None) -> int | None:
     return int(cleaned)
 
 
+def parse_specs(text: str | None) -> list[str]:
+    """Parse comma/slash-separated spec preferences, canonicalising known ones.
+
+    Recognised specs (see ``config.SPECS``) are normalised to their canonical
+    capitalisation; anything else is title-cased and kept. Capped at 4.
+    """
+    if not text:
+        return []
+    lookup = {s.lower(): s for s in config.SPECS}
+    out: list[str] = []
+    for tok in re.split(r"[,/|]+", text):
+        tok = tok.strip()
+        if not tok:
+            continue
+        canon = lookup.get(tok.lower(), tok.title())
+        if canon not in out:
+            out.append(canon)
+        if len(out) == 4:
+            break
+    return out
+
+
 _CHANNEL_LINK_RE = re.compile(r"channels/\d+/(\d+)")
 
 
@@ -196,15 +219,34 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
         super().__init__()
         self._party_id = party_id
         self._role_key = role_key
-        # Pre-fill with the player's previously entered score, if any.
-        if existing is not None and existing.gear_score is not None:
-            self.gear_score.default = str(existing.gear_score)
+        # Pre-fill with the player's previous entries, if any.
+        if existing is not None:
+            if existing.gear_score is not None:
+                self.gear_score.default = str(existing.gear_score)
+            if existing.weapons:
+                self.weapons.default = " / ".join(
+                    weapons_mod.ABBR.get(w, w) for w in existing.weapons
+                )
+            if existing.specs:
+                self.specs.default = ", ".join(existing.specs)
 
     gear_score = discord.ui.TextInput(
         label="Your Gear Score (CP)",
         placeholder="e.g. 4200",
         required=True,
         max_length=6,
+    )
+    weapons = discord.ui.TextInput(
+        label="Your weapons (required)",
+        placeholder="e.g. GS / Dagger  →  shows as Bladedancer",
+        required=True,
+        max_length=40,
+    )
+    specs = discord.ui.TextInput(
+        label="Your spec preferences (required)",
+        placeholder="one or more, e.g. DPS, PvE",
+        required=True,
+        max_length=60,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -229,15 +271,32 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
             )
             return
 
+        weps = weapons_mod.parse_weapons(self.weapons.value)
+        if not weps:
+            await interaction.response.send_message(
+                "Please enter your weapons, e.g. `GS / Dagger`.", ephemeral=True
+            )
+            return
+        specs = parse_specs(self.specs.value)
+        if not specs:
+            await interaction.response.send_message(
+                "Please enter at least one spec preference, e.g. `DPS, PvE`.", ephemeral=True
+            )
+            return
+
         changed, msg = party.add_or_move(
-            interaction.user.id, interaction.user.display_name, self._role_key, gear_score=gs
+            interaction.user.id, interaction.user.display_name, self._role_key,
+            gear_score=gs, weapons=weps, specs=specs,
         )
         if not changed:
             await interaction.response.send_message(msg, ephemeral=True)
             return
 
         await _rerender_card(interaction.client, party)
-        await interaction.response.send_message(f"{msg} (Gear Score: {gs:,})", ephemeral=True)
+        title = weapons_mod.class_title(weps)
+        await interaction.response.send_message(
+            f"{msg} ({title} · {'/'.join(specs)} · Gear Score: {gs:,})", ephemeral=True
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -245,13 +304,18 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
 # --------------------------------------------------------------------------- #
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     def __init__(self, activity: str, difficulty: str, gear_score: int | None = None,
-                 voice_channel_id: int | None = None, voice_link: str | None = None) -> None:
+                 voice_channel_id: int | None = None, voice_link: str | None = None,
+                 leader_weapons: list[str] | None = None, runs: int | None = None,
+                 required_spec: str | None = None) -> None:
         super().__init__()
         self._activity = activity
         self._difficulty = difficulty
         self._gear_score = gear_score
         self._voice_channel_id = voice_channel_id
         self._voice_link = voice_link
+        self._leader_weapons = leader_weapons or []
+        self._runs = runs
+        self._required_spec = required_spec
 
     # Roles in one field: "Tank/Healer/DPS". Default = classic 1/1/4 six-stack.
     roles = discord.ui.TextInput(
@@ -281,7 +345,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     )
     notes = discord.ui.TextInput(
         label="Notes (optional)",
-        placeholder="e.g. CP 4k+, voice required, bring potions…",
+        placeholder="leave blank, or add a note — e.g. new players welcome, chill run",
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=300,
@@ -325,15 +389,23 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             voice_link=self._voice_link,
             extra_activities=extra,
             duration_seconds=parse_duration(self.duration.value),
+            runs=self._runs,
+            required_spec=self._required_spec,
             start_at=parse_start_time(self.start_time.value),
         )
         # Leader auto-joins the first available role.
         for role_key in ("tank", "healer", "dps"):
             if slots.get(role_key, 0) > 0:
-                party.add_or_move(interaction.user.id, interaction.user.display_name, role_key)
+                party.add_or_move(
+                    interaction.user.id, interaction.user.display_name, role_key,
+                    weapons=self._leader_weapons,
+                )
                 break
 
         store().add(party)
+
+        # Pull the longest-queued matching players into the open slots.
+        placed = fill_party_from_queue(party)
 
         embed = build_party_embed(party)
         view = PartyView()
@@ -347,22 +419,44 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         party.message_id = sent.id
         store().save()
 
-        await _notify_queue(interaction, party)
+        if placed:
+            mentions = " ".join(f"<@{uid}>" for uid in placed)
+            await interaction.followup.send(
+                f"🎟️ {mentions} — you were next in the queue and have been added to this "
+                f"**{party.activity}** party! (longest-queued first)",
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
 
 
-async def _notify_queue(interaction: discord.Interaction, party: Party) -> None:
-    """Ping anyone queued for this party's dungeon(s), then clear them."""
-    if _queue is None:
-        return
-    open_roles = {r for r in party.slots if party.open_slots(r) > 0}
-    matched = queue_store().matches(party.guild_id, party.all_activities, open_roles)
-    # Don't ping the party leader about their own party.
-    matched = [e for e in matched if e.user_id != party.leader_id]
-    if not matched:
-        return
-    queue_store().remove_entries(matched)
-    mentions = " ".join(f"<@{uid}>" for uid in dict.fromkeys(e.user_id for e in matched))
-    await interaction.followup.send(
-        f"🔔 {mentions} — a party for **{party.activity}** just formed! Jump in above. ⬆️",
-        allowed_mentions=discord.AllowedMentions(users=True),
-    )
+def fill_party_from_queue(party: Party) -> list[int]:
+    """Fill the party's open slots from the queue, longest-queued players first.
+
+    A queued player is placed into their requested role if it has space,
+    otherwise (for "any role" entries) into the first open role. Placed players
+    are removed from the queue. Returns the list of user ids that were added.
+    """
+    if _queue is None or party.closed:
+        return []
+
+    placed_entries = []
+    for entry in queue_store().candidates(party.guild_id, party.all_activities):
+        if party.is_full:
+            break
+        if entry.user_id == party.leader_id or party.find_member(entry.user_id):
+            continue
+        if entry.role and party.open_slots(entry.role) > 0:
+            role = entry.role
+        elif entry.role is None:
+            role = next((r for r in config.ROLE_ORDER if party.open_slots(r) > 0), None)
+        else:
+            role = None  # wanted a specific role that's already full
+        if role is None:
+            continue
+        changed, _ = party.add_or_move(entry.user_id, entry.user_name, role)
+        if changed:
+            placed_entries.append(entry)
+
+    if placed_entries:
+        queue_store().remove_entries(placed_entries)
+        store().save()
+    return [e.user_id for e in placed_entries]

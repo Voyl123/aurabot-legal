@@ -114,6 +114,9 @@ async def _join_with_gs(view, role_custom_id, user, gear_score):
     modal = click.response.modal
     assert modal is not None, "join button should open a gear-score modal"
     modal.gear_score._value = str(gear_score)
+    # Weapons + spec preferences are now required to join.
+    modal.weapons._value = "GS / Dagger"
+    modal.specs._value = "DPS, PvE"
     submit = MockInteraction(user)
     await modal.on_submit(submit)
     return submit
@@ -132,6 +135,34 @@ def test_join_asks_for_gear_score_then_records_it():
         assert submit.client.message.edited is not None
         member = store.get("P1").find_member(11)
         assert member.role == "healer" and member.gear_score == 4200
+    asyncio.run(run())
+
+
+def test_join_requires_weapons_and_specs():
+    async def run():
+        store, view = _setup()
+        # Open the modal, supply gear score but leave weapons blank → rejected.
+        click = await _click(view, "party:join:dps", MockUser(30, "NoWeps"))
+        modal = click.response.modal
+        modal.gear_score._value = "4000"
+        modal.weapons._value = ""
+        modal.specs._value = "DPS"
+        submit = MockInteraction(MockUser(30, "NoWeps"))
+        await modal.on_submit(submit)
+        assert submit.response.sent and "weapons" in submit.response.sent[0][0].lower()
+        assert store.get("P1").find_member(30) is None
+    asyncio.run(run())
+
+
+def test_join_records_weapons_specs_and_class_title():
+    async def run():
+        store, view = _setup()
+        submit = await _join_with_gs(view, "party:join:dps", MockUser(31, "Blade"), 4300)
+        member = store.get("P1").find_member(31)
+        assert member.weapons == ["Greatsword", "Daggers"]
+        assert member.specs == ["DPS", "PvE"]
+        # Confirmation mentions the derived class title.
+        assert "Bladedancer" in submit.response.sent[0][0]
     asyncio.run(run())
 
 

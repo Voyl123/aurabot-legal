@@ -43,12 +43,86 @@ the party's minimum, then shown next to your name. Clicking another role moves y
 
 ### Finding a group & the queue
 - **`/lfg`** — find parties looking for members, optionally filtered by dungeon and/or role.
-- **`/queue`** — queue for a dungeon: if a party is already looking you see it instantly,
-  otherwise you're queued and **pinged the moment a matching party forms**.
-- **`/unqueue`** — leave the queue.
+- **`/queue`** — queue for a specific dungeon **or 🎲 Any dungeon**: if a party is already
+  looking you see it instantly, otherwise you're queued and **auto-added the moment a
+  matching party forms** — open slots fill from the queue **longest-waited first**.
+- **`/myqueue`** — see what you're queued for. **`/unqueue`** — leave the queue.
 - **`/help`** — quick usage guide.
 
 Parties and queues persist to `data/*.json`, and the buttons keep working after a restart.
+
+---
+
+## Examples
+
+**Make a party** — pick the dungeon, difficulty, a min Gear Score and paste a voice link:
+
+```
+/create  activity:★★★ T3 · Chapel of Madness  difficulty:Epic  gear_score:3500  voice:https://discord.com/channels/123/456  weapons:SnS / Wand  runs:3  spec:DPS
+```
+
+Your `weapons` become a **class title** automatically — `SnS / Wand` → **Paladin**,
+`GS / Dagger` → **Bladedancer**, `Staff / Wand` → **Sage**, and so on. `runs` and `spec`
+(or "any") show on the card; leave `spec` blank if you don't mind.
+
+…then the pop-up form fills in the rest:
+
+```
+Roles — Tank / Healer / DPS : 1 / 1 / 4
+Start time (optional)       : 20:00
+Running for (optional)      : 2h
+Other dungeons (optional)   : ★★★ T3 · Rancorwood
+Notes (optional)            : (blank — or e.g. "new players welcome")
+```
+
+**The party card it posts** (updates live as people join):
+
+```
+Party Finder · led by Voyl
+★★★ T3 · Chapel of Madness
+🟢 Recruiting
+▰▰▱▱▱▱  2/6
+🎮 Epic · ⚡ 3,500+ CP · 🧭 DPS · 🔁 3 runs · 🔊 #raid-voice
+🕒 Today 20:00 · in 2 hours   ⏳ Running for 2h · ends in 4 hours
+
+🛡️ Tank · 1/1                       💚 Healer · 1/1                   ⚔️ DPS · 0/4
+👑 Voyl · Paladin · Tank/PvE · 4,000   Mendy · Sage · Healer · 3,800   + open
+                                                                       + open
+                                                                       + open
+                                                                       + open
+
+🎯 Also running
+• ★★★ T3 · Rancorwood
+
+🔎 Still need:  ⚔️ 4 DPS
+📝 Notes: bring purifies, voice required
+Party #A1B2C3 · tap a role below to join
+[🛡️ Tank] [💚 Healer] [⚔️ DPS]   [🚪 Leave] [🔒 Disband]
+```
+
+Clicking **⚔️ DPS** requires your **Gear Score**, **weapons** and one or more **spec
+preferences** (e.g. `DPS, PvE`), then adds you:
+`✓ You joined as DPS (Bladedancer (GS/Dagger) · DPS/PvE · Gear Score: 4,100)`.
+
+All times (start, ends-in, the `/lfg` list) use **Discord timestamps**, so every member
+sees them in their own timezone with a live countdown — handy across regions.
+
+**Find a group:**
+
+```
+/lfg                                   → every party recruiting right now
+/lfg  activity:★★★ T3 · Rancorwood     → only parties running Rancorwood
+/lfg  role:Healer                      → only parties that still need a Healer
+```
+
+**Use the queue** (get auto-added when a party forms, longest-waited first):
+
+```
+/queue  activity:★★★ T3 · Rancorwood  role:DPS   → queue for that dungeon as DPS
+/queue                                            → 🎲 Any dungeon, any role
+/myqueue                                          → see what you're queued for
+/unqueue                                          → leave the queue
+```
 
 ---
 
@@ -63,7 +137,7 @@ Parties and queues persist to `data/*.json`, and the buttons keep working after 
 ### 2. Configure & run
 ```bash
 git clone <this-repo>
-cd d20
+cd <repo-folder>
 
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -81,7 +155,7 @@ an hour the first time).
 ## Project layout
 
 ```
-bot.py                 # entry point, slash commands (/create /lfg /queue /unqueue /help)
+bot.py                 # entry point, slash commands (/create /lfg /queue /myqueue /unqueue /help)
 src/
   config.py            # roles, activity list, colours, difficulties
   party.py             # Party data model + JSON persistence

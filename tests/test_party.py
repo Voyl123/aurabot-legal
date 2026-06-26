@@ -119,6 +119,28 @@ def test_embed_shows_member_gear_score_and_voice():
     assert any("4,200" in (f.value or "") for f in embed.fields)
 
 
+def test_embed_shows_class_title_from_weapons():
+    p = make_party()
+    p.add_or_move(10, "Voyl", "dps", gear_score=4100, weapons=["Greatsword", "Daggers"],
+                  specs=["DPS", "PvE"])
+    embed = build_party_embed(p)
+    dps_field = next(f for f in embed.fields if "DPS" in f.name)
+    assert "Bladedancer" in dps_field.value
+    assert "DPS/PvE" in dps_field.value
+    assert "4,100" in dps_field.value
+
+
+def test_embed_shows_runs_and_required_spec():
+    p = make_party(runs=3, required_spec="Bomber")
+    desc = build_party_embed(p).description
+    assert "3 runs" in desc
+    assert "🧭 Bomber" in desc
+
+
+def test_embed_shows_any_spec_when_unset():
+    assert "any spec" in build_party_embed(make_party()).description
+
+
 def test_embed_renders_voice_link_fallback():
     p = make_party(voice_link="https://discord.gg/abcd")
     assert "[Voice](https://discord.gg/abcd)" in build_party_embed(p).description
