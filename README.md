@@ -53,6 +53,70 @@ Parties and queues persist to `data/*.json`, and the buttons keep working after 
 
 ---
 
+## Examples
+
+**Make a party** — pick the dungeon, difficulty, a min Gear Score and paste a voice link:
+
+```
+/create  activity:★★★ T3 · Chapel of Madness  difficulty:Epic  gear_score:3500  voice:https://discord.com/channels/123/456
+```
+
+…then the pop-up form fills in the rest:
+
+```
+Roles — Tank / Healer / DPS : 1 / 1 / 4
+Start time (optional)       : 20:00
+Running for (optional)      : 2h
+Other dungeons (optional)   : ★★★ T3 · Rancorwood
+Notes (optional)            : bring purifies, voice required
+```
+
+**The party card it posts** (updates live as people join):
+
+```
+Party Finder · led by Voyl
+★★★ T3 · Chapel of Madness
+🟢 Recruiting
+▰▰▱▱▱▱  2/6
+🎮 Epic · ⚡ 3,500+ CP · 🔊 #raid-voice
+🕒 Today 20:00 · in 2 hours   ⏳ Running for 2h · ends in 4 hours
+
+🛡️ Tank · 1/1        💚 Healer · 1/1       ⚔️ DPS · 0/4
+👑 Voyl              Mendy · 3,800         + open
+                                           + open
+                                           + open
+                                           + open
+
+🎯 Also running
+• ★★★ T3 · Rancorwood
+
+🔎 Still need:  ⚔️ 4 DPS
+📝 Notes: bring purifies, voice required
+Party #A1B2C3 · tap a role below to join
+[🛡️ Tank] [💚 Healer] [⚔️ DPS]   [🚪 Leave] [🔒 Disband]
+```
+
+Clicking **⚔️ DPS** asks for your Gear Score, then adds you: `✓ You joined as DPS (Gear Score: 4,100)`.
+
+**Find a group:**
+
+```
+/lfg                                   → every party recruiting right now
+/lfg  activity:★★★ T3 · Rancorwood     → only parties running Rancorwood
+/lfg  role:Healer                      → only parties that still need a Healer
+```
+
+**Use the queue** (get auto-added when a party forms, longest-waited first):
+
+```
+/queue  activity:★★★ T3 · Rancorwood  role:DPS   → queue for that dungeon as DPS
+/queue                                            → 🎲 Any dungeon, any role
+/myqueue                                          → see what you're queued for
+/unqueue                                          → leave the queue
+```
+
+---
+
 ## Setup
 
 ### 1. Create the bot application
