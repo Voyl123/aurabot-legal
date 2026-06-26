@@ -1,4 +1,4 @@
-# ⚔️ AuraBot — Throne and Liberty Dungeon Party Creator
+# ⚔️ Throne and Liberty Dungeon Party Creator
 
 A Discord bot for **Throne and Liberty** that lets players spin up parties and
 recruit **Tanks 🛡️, Healers 💚 and DPS ⚔️** with a clean, interactive UI —
