@@ -75,6 +75,21 @@ data/parties.json      # runtime state (git-ignored)
 
 ---
 
+## Development & tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q          # unit + interaction-flow tests
+python -m compileall bot.py src
+```
+
+CI runs the same checks on every push and pull request across Python 3.10–3.12
+(see `.github/workflows/ci.yml`). Tests live in `tests/` and cover the start-time
+parser, the party model + JSON persistence, embed rendering, and the full button
+interaction flow (join / leave / disband) via mocked Discord interactions.
+
+---
+
 ## Legal
 
 [Privacy Policy](privacy.html) · [Terms of Service](terms.html)
