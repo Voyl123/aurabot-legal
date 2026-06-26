@@ -58,11 +58,12 @@ Parties and queues persist to `data/*.json`, and the buttons keep working after 
 **Make a party** — pick the dungeon, difficulty, a min Gear Score and paste a voice link:
 
 ```
-/create  activity:★★★ T3 · Chapel of Madness  difficulty:Epic  gear_score:3500  voice:https://discord.com/channels/123/456  weapons:SnS / Wand
+/create  activity:★★★ T3 · Chapel of Madness  difficulty:Epic  gear_score:3500  voice:https://discord.com/channels/123/456  weapons:SnS / Wand  runs:3  spec:DPS
 ```
 
 Your `weapons` become a **class title** automatically — `SnS / Wand` → **Paladin**,
-`GS / Dagger` → **Bladedancer**, `Staff / Wand` → **Sage**, and so on.
+`GS / Dagger` → **Bladedancer**, `Staff / Wand` → **Sage**, and so on. `runs` and `spec`
+(or "any") show on the card; leave `spec` blank if you don't mind.
 
 …then the pop-up form fills in the rest:
 
@@ -71,7 +72,7 @@ Roles — Tank / Healer / DPS : 1 / 1 / 4
 Start time (optional)       : 20:00
 Running for (optional)      : 2h
 Other dungeons (optional)   : ★★★ T3 · Rancorwood
-Notes (optional)            : bring purifies, voice required
+Notes (optional)            : (blank — or e.g. "new players welcome")
 ```
 
 **The party card it posts** (updates live as people join):
@@ -81,14 +82,14 @@ Party Finder · led by Voyl
 ★★★ T3 · Chapel of Madness
 🟢 Recruiting
 ▰▰▱▱▱▱  2/6
-🎮 Epic · ⚡ 3,500+ CP · 🔊 #raid-voice
+🎮 Epic · ⚡ 3,500+ CP · 🧭 DPS · 🔁 3 runs · 🔊 #raid-voice
 🕒 Today 20:00 · in 2 hours   ⏳ Running for 2h · ends in 4 hours
 
-🛡️ Tank · 1/1                 💚 Healer · 1/1               ⚔️ DPS · 0/4
-👑 Voyl · Paladin · 4,000     Mendy · Sage · 3,800         + open
-                                                           + open
-                                                           + open
-                                                           + open
+🛡️ Tank · 1/1                       💚 Healer · 1/1                   ⚔️ DPS · 0/4
+👑 Voyl · Paladin · Tank/PvE · 4,000   Mendy · Sage · Healer · 3,800   + open
+                                                                       + open
+                                                                       + open
+                                                                       + open
 
 🎯 Also running
 • ★★★ T3 · Rancorwood
@@ -99,8 +100,12 @@ Party #A1B2C3 · tap a role below to join
 [🛡️ Tank] [💚 Healer] [⚔️ DPS]   [🚪 Leave] [🔒 Disband]
 ```
 
-Clicking **⚔️ DPS** asks for your Gear Score and weapons, then adds you:
-`✓ You joined as DPS (Gear Score: 4,100 · Bladedancer (GS/Dagger))`.
+Clicking **⚔️ DPS** requires your **Gear Score**, **weapons** and one or more **spec
+preferences** (e.g. `DPS, PvE`), then adds you:
+`✓ You joined as DPS (Bladedancer (GS/Dagger) · DPS/PvE · Gear Score: 4,100)`.
+
+All times (start, ends-in, the `/lfg` list) use **Discord timestamps**, so every member
+sees them in their own timezone with a live countdown — handy across regions.
 
 **Find a group:**
 

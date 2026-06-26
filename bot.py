@@ -116,10 +116,13 @@ async def _activity_autocomplete(
     gear_score="Minimum Gear Score / Combat Power applicants should have (optional)",
     voice="Paste a voice channel link or ID for the party to gather in (optional)",
     weapons="Your weapon combo, e.g. GS / Dagger — sets your class title (optional)",
+    runs="How many runs / clears you want to do (optional)",
+    spec="A spec you specifically need — leave blank if you don't mind (optional)",
 )
 @app_commands.autocomplete(activity=_activity_autocomplete)
 @app_commands.choices(
-    difficulty=[app_commands.Choice(name=d, value=d) for d in config.DIFFICULTIES]
+    difficulty=[app_commands.Choice(name=d, value=d) for d in config.DIFFICULTIES],
+    spec=[app_commands.Choice(name=s, value=s) for s in config.SPECS],
 )
 async def create(
     interaction: discord.Interaction,
@@ -128,6 +131,8 @@ async def create(
     gear_score: app_commands.Range[int, 0, 10000] | None = None,
     voice: str | None = None,
     weapons: str | None = None,
+    runs: app_commands.Range[int, 1, 99] | None = None,
+    spec: app_commands.Choice[str] | None = None,
 ):
     diff = difficulty.value if difficulty else "Any"
     voice_channel_id, voice_link = parse_voice(voice)
@@ -140,6 +145,8 @@ async def create(
             voice_channel_id=voice_channel_id,
             voice_link=voice_link,
             leader_weapons=parse_weapons(weapons),
+            runs=runs,
+            required_spec=spec.value if spec else None,
         )
     )
 
@@ -172,9 +179,11 @@ def _party_line(p) -> tuple[str, str]:
     )
     link = f"https://discord.com/channels/{p.guild_id}/{p.channel_id}/{p.message_id}"
     gs = f" • ⚡ {p.min_gear_score:,}+ CP" if p.min_gear_score else ""
+    # Discord timestamp → shown in each viewer's own timezone, with a countdown.
+    when = f"\n🕒 starts <t:{int(p.start_at)}:R>" if p.start_at else ""
     return (
         f"{p.activity} ({p.difficulty}) — {p.size}/{p.capacity}{gs}",
-        f"Needs: {needs or '—'}\n[Jump to party]({link})",
+        f"Needs: {needs or '—'}{when}\n[Jump to party]({link})",
     )
 
 
@@ -313,9 +322,9 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="/create",
         value="Start a party. Pick an activity (raids, T1–T3 dungeons, archbosses…), a "
-              "difficulty, an optional **min Gear Score (CP)** and a **voice link**. In the "
-              "form you can set roles, a **start time**, how long it's **running for**, and "
-              "**other dungeons** you'll also run. The bot posts a live party card.",
+              "difficulty, optional **min Gear Score**, **voice link**, **# of runs** and a "
+              "**spec** you need (or leave blank for any). In the form: roles, **start time**, "
+              "how long it's **running for**, **other dungeons**, and notes. Posts a live card.",
         inline=False,
     )
     embed.add_field(
@@ -332,10 +341,10 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="Joining & leaving",
-        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card — you'll be asked "
-              "for your **Gear Score (CP)** and **weapons** (e.g. `GS / Dagger`), which the "
-              "bot turns into a **class title** (Bladedancer) next to your name. Click 🚪 "
-              "**Leave** any time to drop out. The leader can 🔒 **Disband**.",
+        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card. You must set your "
+              "**Gear Score**, **weapons** (e.g. `GS / Dagger` → class title *Bladedancer*) and "
+              "one or more **spec preferences** (e.g. `DPS, PvE`) — all shown next to your name. "
+              "Click 🚪 **Leave** any time. The leader can 🔒 **Disband**.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)

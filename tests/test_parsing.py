@@ -1,7 +1,22 @@
 """Tests for the small input parsers (gear score, voice link, roles, duration)."""
 
-from src.views import CreatePartyModal, _parse_gear_score, parse_voice
+from src.views import CreatePartyModal, _parse_gear_score, parse_specs, parse_voice
 from src.timeparse import parse_duration, humanize_duration
+
+
+def test_parse_specs_canonicalises_and_dedupes():
+    assert parse_specs("dps, pve") == ["DPS", "PvE"]
+    assert parse_specs("DPS / DPS / Tank") == ["DPS", "Tank"]
+
+
+def test_parse_specs_keeps_unknown_titlecased_and_caps_at_four():
+    assert parse_specs("speedrun") == ["Speedrun"]
+    assert parse_specs("a,b,c,d,e") == ["A", "B", "C", "D"]
+
+
+def test_parse_specs_empty():
+    assert parse_specs("") == []
+    assert parse_specs(None) == []
 
 
 def test_parse_roles_slash_and_space():

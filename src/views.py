@@ -166,6 +166,28 @@ def _parse_gear_score(value: str | None) -> int | None:
     return int(cleaned)
 
 
+def parse_specs(text: str | None) -> list[str]:
+    """Parse comma/slash-separated spec preferences, canonicalising known ones.
+
+    Recognised specs (see ``config.SPECS``) are normalised to their canonical
+    capitalisation; anything else is title-cased and kept. Capped at 4.
+    """
+    if not text:
+        return []
+    lookup = {s.lower(): s for s in config.SPECS}
+    out: list[str] = []
+    for tok in re.split(r"[,/|]+", text):
+        tok = tok.strip()
+        if not tok:
+            continue
+        canon = lookup.get(tok.lower(), tok.title())
+        if canon not in out:
+            out.append(canon)
+        if len(out) == 4:
+            break
+    return out
+
+
 _CHANNEL_LINK_RE = re.compile(r"channels/\d+/(\d+)")
 
 
@@ -205,6 +227,8 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
                 self.weapons.default = " / ".join(
                     weapons_mod.ABBR.get(w, w) for w in existing.weapons
                 )
+            if existing.specs:
+                self.specs.default = ", ".join(existing.specs)
 
     gear_score = discord.ui.TextInput(
         label="Your Gear Score (CP)",
@@ -213,10 +237,16 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
         max_length=6,
     )
     weapons = discord.ui.TextInput(
-        label="Your weapons (optional)",
+        label="Your weapons (required)",
         placeholder="e.g. GS / Dagger  →  shows as Bladedancer",
-        required=False,
+        required=True,
         max_length=40,
+    )
+    specs = discord.ui.TextInput(
+        label="Your spec preferences (required)",
+        placeholder="one or more, e.g. DPS, PvE",
+        required=True,
+        max_length=60,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -242,9 +272,21 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
             return
 
         weps = weapons_mod.parse_weapons(self.weapons.value)
+        if not weps:
+            await interaction.response.send_message(
+                "Please enter your weapons, e.g. `GS / Dagger`.", ephemeral=True
+            )
+            return
+        specs = parse_specs(self.specs.value)
+        if not specs:
+            await interaction.response.send_message(
+                "Please enter at least one spec preference, e.g. `DPS, PvE`.", ephemeral=True
+            )
+            return
+
         changed, msg = party.add_or_move(
             interaction.user.id, interaction.user.display_name, self._role_key,
-            gear_score=gs, weapons=weps,
+            gear_score=gs, weapons=weps, specs=specs,
         )
         if not changed:
             await interaction.response.send_message(msg, ephemeral=True)
@@ -252,9 +294,8 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
 
         await _rerender_card(interaction.client, party)
         title = weapons_mod.class_title(weps)
-        extra = f" · {title}" if title else ""
         await interaction.response.send_message(
-            f"{msg} (Gear Score: {gs:,}{extra})", ephemeral=True
+            f"{msg} ({title} · {'/'.join(specs)} · Gear Score: {gs:,})", ephemeral=True
         )
 
 
@@ -264,7 +305,8 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     def __init__(self, activity: str, difficulty: str, gear_score: int | None = None,
                  voice_channel_id: int | None = None, voice_link: str | None = None,
-                 leader_weapons: list[str] | None = None) -> None:
+                 leader_weapons: list[str] | None = None, runs: int | None = None,
+                 required_spec: str | None = None) -> None:
         super().__init__()
         self._activity = activity
         self._difficulty = difficulty
@@ -272,6 +314,8 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         self._voice_channel_id = voice_channel_id
         self._voice_link = voice_link
         self._leader_weapons = leader_weapons or []
+        self._runs = runs
+        self._required_spec = required_spec
 
     # Roles in one field: "Tank/Healer/DPS". Default = classic 1/1/4 six-stack.
     roles = discord.ui.TextInput(
@@ -301,7 +345,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     )
     notes = discord.ui.TextInput(
         label="Notes (optional)",
-        placeholder="e.g. CP 4k+, voice required, bring potions…",
+        placeholder="leave blank, or add a note — e.g. new players welcome, chill run",
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=300,
@@ -345,6 +389,8 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             voice_link=self._voice_link,
             extra_activities=extra,
             duration_seconds=parse_duration(self.duration.value),
+            runs=self._runs,
+            required_spec=self._required_spec,
             start_at=parse_start_time(self.start_time.value),
         )
         # Leader auto-joins the first available role.

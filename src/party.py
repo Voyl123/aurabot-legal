@@ -27,6 +27,7 @@ class Member:
     role: str  # one of config.ROLES keys
     gear_score: int | None = None  # the member's own Gear Score / CP
     weapons: list[str] = field(default_factory=list)  # canonical weapon names
+    specs: list[str] = field(default_factory=list)    # the player's spec preferences
 
 
 @dataclass
@@ -53,6 +54,10 @@ class Party:
     extra_activities: list[str] = field(default_factory=list)
     # How long the party plans to run, in seconds (None = open-ended).
     duration_seconds: int | None = None
+    # How many runs / clears the party wants to do (None = unspecified).
+    runs: int | None = None
+    # A spec the party specifically wants (None = "don't mind").
+    required_spec: str | None = None
     members: list[Member] = field(default_factory=list)
     message_id: int | None = None
     created_at: float = field(default_factory=time.time)
@@ -114,6 +119,7 @@ class Party:
     def add_or_move(
         self, user_id: int, display_name: str, role: str,
         gear_score: int | None = None, weapons: list[str] | None = None,
+        specs: list[str] | None = None,
     ) -> tuple[bool, str]:
         """Add a member, or move them to a new role.
 
@@ -137,9 +143,13 @@ class Party:
                 existing.gear_score = gear_score
             if weapons:
                 existing.weapons = weapons
+            if specs:
+                existing.specs = specs
             return True, f"Moved you to **{config.ROLES[role].label}**."
 
-        self.members.append(Member(user_id, display_name, role, gear_score, weapons or []))
+        self.members.append(
+            Member(user_id, display_name, role, gear_score, weapons or [], specs or [])
+        )
         return True, f"You joined as **{config.ROLES[role].label}**."
 
     def remove(self, user_id: int) -> tuple[bool, str]:

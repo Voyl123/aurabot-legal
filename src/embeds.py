@@ -35,6 +35,8 @@ def _roster_block(party: Party, role_key: str) -> str:
         title = weapons_mod.class_title(m.weapons)
         if title:
             extras.append(title)
+        if m.specs:
+            extras.append("/".join(m.specs))
         if m.gear_score:
             extras.append(f"`{m.gear_score:,}`")
         suffix = (" · " + " · ".join(extras)) if extras else ""
@@ -66,6 +68,9 @@ def build_party_embed(party: Party) -> discord.Embed:
     meta = [f"🎮 {party.difficulty}"]
     if party.min_gear_score:
         meta.append(f"⚡ {party.min_gear_score:,}+ CP")
+    meta.append(f"🧭 {party.required_spec}" if party.required_spec else "🧭 any spec")
+    if party.runs:
+        meta.append(f"🔁 {party.runs} run{'s' if party.runs != 1 else ''}")
     if party.voice_channel_id:
         meta.append(f"🔊 <#{party.voice_channel_id}>")
     elif party.voice_link:
