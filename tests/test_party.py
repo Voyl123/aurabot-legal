@@ -1,0 +1,87 @@
+"""Tests for the Party model, embed rendering and JSON persistence."""
+
+import tempfile
+
+from src.party import Party, PartyStore
+from src.embeds import build_party_embed
+
+
+def make_party(**overrides) -> Party:
+    base = dict(
+        party_id="P1", guild_id=1, channel_id=2, leader_id=10, leader_name="Leader",
+        activity="Field Boss", difficulty="Hard", notes="", slots={"tank": 1, "healer": 1, "dps": 2},
+    )
+    base.update(overrides)
+    return Party(**base)
+
+
+def test_join_move_leave():
+    p = make_party()
+    changed, _ = p.add_or_move(10, "Leader", "tank")
+    assert changed and p.size == 1
+
+    # Already that role -> no change
+    changed, _ = p.add_or_move(10, "Leader", "tank")
+    assert not changed
+
+    # Move to another role
+    changed, _ = p.add_or_move(10, "Leader", "dps")
+    assert changed and p.find_member(10).role == "dps"
+    assert p.size == 1  # still one member, just moved
+
+    changed, _ = p.remove(10)
+    assert changed and p.size == 0
+
+
+def test_role_capacity_enforced():
+    p = make_party()
+    assert p.add_or_move(1, "a", "dps")[0]
+    assert p.add_or_move(2, "b", "dps")[0]
+    # third DPS rejected, only two slots
+    changed, msg = p.add_or_move(3, "c", "dps")
+    assert not changed and "full" in msg.lower()
+
+
+def test_full_and_open_slots():
+    p = make_party()
+    p.add_or_move(1, "a", "tank")
+    p.add_or_move(2, "b", "healer")
+    p.add_or_move(3, "c", "dps")
+    assert p.open_slots("dps") == 1
+    p.add_or_move(4, "d", "dps")
+    assert p.is_full and p.open_slots("dps") == 0
+
+
+def test_closed_party_rejects_joins():
+    p = make_party(closed=True)
+    changed, msg = p.add_or_move(1, "a", "tank")
+    assert not changed and "disbanded" in msg.lower()
+
+
+def test_persistence_roundtrip():
+    p = make_party(start_at=1750005400.0)
+    p.add_or_move(10, "Leader", "tank")
+    p.message_id = 555
+
+    path = tempfile.mktemp(suffix=".json")
+    store = PartyStore(path)
+    store.add(p)
+
+    reloaded = PartyStore(path).get("P1")
+    assert reloaded is not None
+    assert reloaded.start_at == 1750005400.0
+    assert reloaded.message_id == 555
+    assert [(m.display_name, m.role) for m in reloaded.members] == [("Leader", "tank")]
+
+
+def test_embed_shows_timestamp_and_roster():
+    p = make_party(start_at=1750005400.0, notes="CP 4k+")
+    p.add_or_move(10, "Leader", "tank")
+    embed = build_party_embed(p)
+
+    assert "<t:1750005400:F>" in embed.description
+    assert "<t:1750005400:R>" in embed.description
+    field_names = [f.name for f in embed.fields]
+    assert any("Tank" in n for n in field_names)
+    assert any("Looking for" in n for n in field_names)
+    assert any("Notes" in n for n in field_names)
