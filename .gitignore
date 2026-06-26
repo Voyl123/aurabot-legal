@@ -1,0 +1,13 @@
+# Secrets
+.env
+
+# Runtime data (party state)
+data/parties.json
+data/*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
