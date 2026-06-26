@@ -124,6 +124,28 @@ def test_embed_renders_voice_link_fallback():
     assert "[Voice](https://discord.gg/abcd)" in build_party_embed(p).description
 
 
+def test_all_activities_dedupes():
+    p = make_party(activity="A", extra_activities=["B", "A", "C"])
+    assert p.all_activities == ["A", "B", "C"]
+    assert p.wants("B") and not p.wants("Z")
+
+
+def test_duration_end_and_expiry():
+    import time
+    p = make_party(duration_seconds=3600, start_at=time.time() - 10)
+    # ended 10s in the past + 3600 still in the future → not expired
+    assert not p.is_expired
+    past = make_party(duration_seconds=60, start_at=time.time() - 3600)
+    assert past.is_expired
+
+
+def test_has_open_slot():
+    p = make_party(slots={"tank": 1, "healer": 0, "dps": 0})
+    assert p.has_open_slot
+    p.add_or_move(1, "a", "tank")
+    assert not p.has_open_slot
+
+
 def test_embed_marks_leader_with_crown():
     p = make_party()
     p.add_or_move(10, "Leader", "tank")

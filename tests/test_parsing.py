@@ -1,6 +1,33 @@
-"""Tests for the small input parsers in views (gear score, voice link)."""
+"""Tests for the small input parsers (gear score, voice link, roles, duration)."""
 
-from src.views import _parse_gear_score, parse_voice
+from src.views import CreatePartyModal, _parse_gear_score, parse_voice
+from src.timeparse import parse_duration, humanize_duration
+
+
+def test_parse_roles_slash_and_space():
+    assert CreatePartyModal._parse_roles("2/1/3") == {"tank": 2, "healer": 1, "dps": 3}
+    assert CreatePartyModal._parse_roles("2 1 3") == {"tank": 2, "healer": 1, "dps": 3}
+
+
+def test_parse_roles_defaults_and_clamp():
+    assert CreatePartyModal._parse_roles("") == {"tank": 1, "healer": 1, "dps": 4}
+    assert CreatePartyModal._parse_roles("99/0/0")["tank"] == 20  # clamped
+
+
+def test_parse_duration():
+    assert parse_duration("2h") == 7200
+    assert parse_duration("90m") == 5400
+    assert parse_duration("1h30m") == 5400
+    assert parse_duration("90") == 5400  # bare number = minutes
+    assert parse_duration("") is None
+    assert parse_duration("soon") is None
+
+
+def test_humanize_duration():
+    assert humanize_duration(7200) == "2h"
+    assert humanize_duration(5400) == "1h30m"
+    assert humanize_duration(2700) == "45m"
+    assert humanize_duration(None) == ""
 
 
 def test_gear_score_accepts_plain_and_formatted():

@@ -13,6 +13,7 @@ import discord
 
 from . import config
 from .party import Party
+from .timeparse import humanize_duration
 
 
 def _fill_bar(size: int, capacity: int, width: int = 12) -> str:
@@ -69,6 +70,12 @@ def build_party_embed(party: Party) -> discord.Embed:
         # Discord renders <t:..> in each viewer's own timezone; :R auto-counts down.
         description_lines.append(f"🕒 <t:{ts}:f> · <t:{ts}:R>")
 
+    if party.duration_seconds:
+        line = f"⏳ Running for {humanize_duration(party.duration_seconds)}"
+        if party.end_at and not party.closed:
+            line += f" · ends <t:{int(party.end_at)}:R>"
+        description_lines.append(line)
+
     embed = discord.Embed(
         title=party.activity,
         description="\n".join(description_lines),
@@ -88,6 +95,14 @@ def build_party_embed(party: Party) -> discord.Embed:
             name=f"{role.emoji} {role.label} · {filled}/{total}",
             value=_roster_block(party, role_key),
             inline=True,
+        )
+
+    # --- Other dungeons this party is also running ------------------------ #
+    if party.extra_activities:
+        embed.add_field(
+            name="🎯 Also running",
+            value="\n".join(f"• {a}" for a in party.extra_activities),
+            inline=False,
         )
 
     # --- What's still needed ---------------------------------------------- #

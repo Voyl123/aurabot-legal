@@ -35,7 +35,7 @@ class Party:
     channel_id: int
     leader_id: int
     leader_name: str
-    activity: str
+    activity: str  # the primary dungeon / activity (used as the card title)
     difficulty: str
     notes: str
     # role key -> max slots for that role
@@ -48,6 +48,10 @@ class Party:
     # is kept verbatim in ``voice_link`` and rendered as a hyperlink.
     voice_channel_id: int | None = None
     voice_link: str | None = None
+    # Additional dungeons this party also wants to run (besides ``activity``).
+    extra_activities: list[str] = field(default_factory=list)
+    # How long the party plans to run, in seconds (None = open-ended).
+    duration_seconds: int | None = None
     members: list[Member] = field(default_factory=list)
     message_id: int | None = None
     created_at: float = field(default_factory=time.time)
@@ -66,6 +70,35 @@ class Party:
     @property
     def is_full(self) -> bool:
         return self.size >= self.capacity
+
+    @property
+    def all_activities(self) -> list[str]:
+        """The primary activity plus any extra dungeons, de-duplicated."""
+        seen: list[str] = []
+        for a in [self.activity, *self.extra_activities]:
+            if a and a not in seen:
+                seen.append(a)
+        return seen
+
+    @property
+    def end_at(self) -> float | None:
+        """When the party is scheduled to wrap up, if a duration was set."""
+        if self.duration_seconds is None:
+            return None
+        return (self.start_at or self.created_at) + self.duration_seconds
+
+    @property
+    def is_expired(self) -> bool:
+        end = self.end_at
+        return end is not None and time.time() > end
+
+    def wants(self, activity: str) -> bool:
+        """True if this party is running the given activity."""
+        return activity in self.all_activities
+
+    @property
+    def has_open_slot(self) -> bool:
+        return any(self.open_slots(r) > 0 for r in self.slots)
 
     def members_for(self, role: str) -> list[Member]:
         return [m for m in self.members if m.role == role]

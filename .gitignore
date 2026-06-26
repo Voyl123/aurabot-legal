@@ -1,8 +1,9 @@
 # Secrets
 .env
 
-# Runtime data (party state)
+# Runtime data (party + queue state)
 data/parties.json
+data/queue.json
 data/*.tmp
 
 # Python

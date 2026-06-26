@@ -11,7 +11,7 @@ import os
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 try:
     from dotenv import load_dotenv
@@ -21,7 +21,17 @@ except ImportError:  # python-dotenv is optional
 
 from src import config
 from src.party import PartyStore
-from src.views import CreatePartyModal, PartyView, parse_voice, set_store, store
+from src.queues import QueueEntry, QueueStore
+from src.views import (
+    CreatePartyModal,
+    PartyView,
+    _rerender_card,
+    parse_voice,
+    queue_store,
+    set_queue_store,
+    set_store,
+    store,
+)
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -36,13 +46,17 @@ class D20Bot(commands.Bot):
         intents = discord.Intents.default()
         # We only use slash commands + interactions, so no privileged intents
         # (message content / members) are required.
-        super().__init__(command_prefix="!aura ", intents=intents)
+        super().__init__(command_prefix="!d20 ", intents=intents)
         self.store = PartyStore()
+        self.queue = QueueStore()
         set_store(self.store)
+        set_queue_store(self.queue)
 
     async def setup_hook(self) -> None:
         # Register the persistent view so buttons survive restarts.
         self.add_view(PartyView())
+        if not self.expire_parties.is_running():
+            self.expire_parties.start()
 
         # Sync slash commands. If DISCORD_GUILD_ID is set we sync to that guild
         # for instant availability during development; otherwise sync globally.
@@ -60,9 +74,24 @@ class D20Bot(commands.Bot):
         log.info("Logged in as %s (id=%s)", self.user, self.user.id if self.user else "?")
         await self.change_presence(
             activity=discord.Activity(
-                type=discord.ActivityType.watching, name="for parties • /create"
+                type=discord.ActivityType.watching, name="for parties • /lfg"
             )
         )
+
+    @tasks.loop(minutes=1)
+    async def expire_parties(self) -> None:
+        """Close parties whose running time has elapsed and update their cards."""
+        for party in self.store.active():
+            if party.is_expired:
+                party.closed = True
+                try:
+                    await _rerender_card(self, party)
+                except (discord.HTTPException, discord.NotFound):
+                    self.store.save()  # at least persist the closed state
+
+    @expire_parties.before_loop
+    async def _before_expire(self) -> None:
+        await self.wait_until_ready()
 
 
 bot = D20Bot()
@@ -111,36 +140,122 @@ async def create(
     )
 
 
-@bot.tree.command(name="parties", description="List the parties currently recruiting in this server.")
-async def parties(interaction: discord.Interaction):
-    active = [
-        p for p in store().active()
-        if p.guild_id == (interaction.guild_id or 0) and not p.is_full
-    ]
-    if not active:
+_ROLE_CHOICES = [
+    app_commands.Choice(name=config.ROLES[r].label, value=r) for r in config.ROLE_ORDER
+]
+
+
+def _find_parties(guild_id: int, activity: str | None = None, role: str | None = None):
+    """Active parties that are recruiting (open, not full, not expired)."""
+    out = []
+    for p in store().active():
+        if p.guild_id != guild_id or p.is_full or p.is_expired:
+            continue
+        if activity and not p.wants(activity):
+            continue
+        if role and p.open_slots(role) <= 0:
+            continue
+        if not role and not p.has_open_slot:
+            continue
+        out.append(p)
+    return out
+
+
+def _party_line(p) -> tuple[str, str]:
+    needs = " · ".join(
+        f"{config.ROLES[r].emoji} {p.open_slots(r)} {config.ROLES[r].label}"
+        for r in config.ROLE_ORDER if p.open_slots(r) > 0
+    )
+    link = f"https://discord.com/channels/{p.guild_id}/{p.channel_id}/{p.message_id}"
+    gs = f" • ⚡ {p.min_gear_score:,}+ CP" if p.min_gear_score else ""
+    return (
+        f"{p.activity} ({p.difficulty}) — {p.size}/{p.capacity}{gs}",
+        f"Needs: {needs or '—'}\n[Jump to party]({link})",
+    )
+
+
+@bot.tree.command(name="lfg", description="Find parties looking for members (optionally filter by dungeon/role).")
+@app_commands.describe(
+    activity="Only show parties running this dungeon/activity (optional)",
+    role="Only show parties that still need this role (optional)",
+)
+@app_commands.autocomplete(activity=_activity_autocomplete)
+@app_commands.choices(role=_ROLE_CHOICES)
+async def lfg(
+    interaction: discord.Interaction,
+    activity: str | None = None,
+    role: app_commands.Choice[str] | None = None,
+):
+    role_key = role.value if role else None
+    found = _find_parties(interaction.guild_id or 0, activity, role_key)
+    if not found:
+        hint = " Try `/queue` to get pinged when one forms." if activity else ""
         await interaction.response.send_message(
-            "No parties are recruiting right now. Be the first — use `/create`! ⚔️",
+            f"No parties are looking for members right now.{hint} Or start one with `/create`! ⚔️",
             ephemeral=True,
         )
         return
 
-    embed = discord.Embed(
-        title="🗺️ Parties currently recruiting",
-        color=config.Colors.ACCENT,
-    )
-    for p in active[:25]:
-        needs = ", ".join(
-            f"{config.ROLES[r].emoji} {p.open_slots(r)} {config.ROLES[r].label}"
-            for r in config.ROLE_ORDER if p.open_slots(r) > 0
-        )
-        link = f"https://discord.com/channels/{p.guild_id}/{p.channel_id}/{p.message_id}"
-        gs = f" • ⚡ {p.min_gear_score:,}+ CP" if p.min_gear_score else ""
-        embed.add_field(
-            name=f"{p.activity} ({p.difficulty}) — {p.size}/{p.capacity}{gs}",
-            value=f"Needs: {needs or '—'}\n[Jump to party]({link})",
-            inline=False,
-        )
+    embed = discord.Embed(title="🔎 Looking for group", color=config.Colors.ACCENT)
+    for p in found[:25]:
+        name, value = _party_line(p)
+        embed.add_field(name=name, value=value, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="queue", description="Queue for a dungeon — see matching parties now, or get pinged when one forms.")
+@app_commands.describe(
+    activity="The dungeon/activity you want to run",
+    role="The role you'll play (optional)",
+)
+@app_commands.autocomplete(activity=_activity_autocomplete)
+@app_commands.choices(role=_ROLE_CHOICES)
+async def queue(
+    interaction: discord.Interaction,
+    activity: str,
+    role: app_commands.Choice[str] | None = None,
+):
+    role_key = role.value if role else None
+    guild_id = interaction.guild_id or 0
+
+    # First, look through parties already made / looking.
+    found = _find_parties(guild_id, activity, role_key)
+    if found:
+        embed = discord.Embed(
+            title=f"🔎 Parties already running {activity}",
+            description="Jump in below — no need to wait!",
+            color=config.Colors.ACCENT,
+        )
+        for p in found[:25]:
+            name, value = _party_line(p)
+            embed.add_field(name=name, value=value, inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    # None yet — add them to the queue to be pinged when a party forms.
+    queue_store().add(QueueEntry(
+        user_id=interaction.user.id,
+        user_name=interaction.user.display_name,
+        guild_id=guild_id,
+        activity=activity,
+        role=role_key,
+    ))
+    role_txt = f" as **{config.ROLES[role_key].label}**" if role_key else ""
+    await interaction.response.send_message(
+        f"🎟️ You're queued for **{activity}**{role_txt}. I'll ping you the moment a "
+        f"matching party is created. Use `/unqueue` to leave the queue.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="unqueue", description="Leave the party queue.")
+async def unqueue(interaction: discord.Interaction):
+    removed = queue_store().remove_user(interaction.user.id, interaction.guild_id or 0)
+    msg = (
+        f"✅ Removed you from {removed} queue{'s' if removed != 1 else ''}."
+        if removed else "You weren't in any queues."
+    )
+    await interaction.response.send_message(msg, ephemeral=True)
 
 
 @bot.tree.command(name="help", description="How to use the party bot.")
@@ -152,21 +267,29 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="/create",
-        value="Start a new party. Pick an activity (raids, T1–T3 dungeons, archbosses…), "
-              "a difficulty, an optional **minimum Gear Score (CP)** and a **voice channel**. "
-              "Then set how many of each role you need and the bot posts a live party card.",
+        value="Start a party. Pick an activity (raids, T1–T3 dungeons, archbosses…), a "
+              "difficulty, an optional **min Gear Score (CP)** and a **voice link**. In the "
+              "form you can set roles, a **start time**, how long it's **running for**, and "
+              "**other dungeons** you'll also run. The bot posts a live party card.",
         inline=False,
     )
     embed.add_field(
-        name="/parties",
-        value="See every party still looking for members, and what roles they need.",
+        name="/lfg",
+        value="Find parties looking for members. Filter by dungeon and/or the role you play.",
         inline=False,
     )
     embed.add_field(
-        name="Joining a party",
-        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any party card — you'll be "
-              "asked for your **Gear Score (CP)**, which then shows next to your name. "
-              "Use 🚪 **Leave** to drop out. The leader can 🔒 **Disband**.",
+        name="/queue · /unqueue",
+        value="`/queue` a dungeon: if a party's already looking you'll see it instantly — "
+              "otherwise you're queued and **pinged the moment a matching party forms**. "
+              "`/unqueue` leaves the queue.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Joining & leaving",
+        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card — you'll be asked "
+              "for your **Gear Score (CP)**, which shows next to your name. Click 🚪 **Leave** "
+              "any time to drop out. The leader can 🔒 **Disband**.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)

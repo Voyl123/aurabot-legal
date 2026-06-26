@@ -10,11 +10,13 @@ import discord
 from . import config
 from .embeds import build_party_embed
 from .party import Party, PartyStore
-from .timeparse import parse_start_time
+from .queues import QueueStore
+from .timeparse import parse_duration, parse_start_time
 
 
-# The store is injected by bot.py at startup via :func:`set_store`.
+# The stores are injected by bot.py at startup.
 _store: PartyStore | None = None
+_queue: QueueStore | None = None
 
 
 def set_store(store: PartyStore) -> None:
@@ -25,6 +27,16 @@ def set_store(store: PartyStore) -> None:
 def store() -> PartyStore:
     assert _store is not None, "PartyStore not initialised"
     return _store
+
+
+def set_queue_store(queue: QueueStore) -> None:
+    global _queue
+    _queue = queue
+
+
+def queue_store() -> QueueStore:
+    assert _queue is not None, "QueueStore not initialised"
+    return _queue
 
 
 async def _refresh(interaction: discord.Interaction, party: Party) -> None:
@@ -241,11 +253,31 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         self._voice_channel_id = voice_channel_id
         self._voice_link = voice_link
 
+    # Roles in one field: "Tank/Healer/DPS". Default = classic 1/1/4 six-stack.
+    roles = discord.ui.TextInput(
+        label="Roles — Tank / Healer / DPS",
+        default="1 / 1 / 4",
+        placeholder="e.g. 1 / 1 / 4",
+        max_length=12,
+        required=False,
+    )
     start_time = discord.ui.TextInput(
         label="Start time (optional)",
         placeholder="now • 30m • 20:00 • or paste a sesh.fyi timestamp",
         required=False,
         max_length=40,
+    )
+    duration = discord.ui.TextInput(
+        label="Running for (optional)",
+        placeholder="e.g. 2h • 90m • 1h30m",
+        required=False,
+        max_length=12,
+    )
+    dungeons = discord.ui.TextInput(
+        label="Other dungeons (optional)",
+        placeholder="comma-separated, e.g. Tyrant's Isle, Rancorwood",
+        required=False,
+        max_length=200,
     )
     notes = discord.ui.TextInput(
         label="Notes (optional)",
@@ -254,35 +286,29 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         required=False,
         max_length=300,
     )
-    # Slots: defaults give the classic 1 Tank / 1 Healer / 4 DPS six-stack.
-    tanks = discord.ui.TextInput(
-        label="Tank slots", default="1", max_length=2, required=False
-    )
-    healers = discord.ui.TextInput(
-        label="Healer slots", default="1", max_length=2, required=False
-    )
-    dps = discord.ui.TextInput(
-        label="DPS slots", default="4", max_length=2, required=False
-    )
 
     @staticmethod
-    def _to_int(value: str, fallback: int) -> int:
-        try:
-            return max(0, min(20, int(value.strip())))
-        except (ValueError, AttributeError):
-            return fallback
+    def _parse_roles(value: str | None) -> dict[str, int]:
+        """Parse "T / H / D" (slash- or space-separated) into role slot counts."""
+        defaults = [1, 1, 4]
+        parts = re.split(r"[\s/,]+", (value or "").strip()) if value else []
+        nums: list[int] = []
+        for i in range(3):
+            try:
+                nums.append(max(0, min(20, int(parts[i]))))
+            except (ValueError, IndexError):
+                nums.append(defaults[i])
+        return {"tank": nums[0], "healer": nums[1], "dps": nums[2]}
 
     async def on_submit(self, interaction: discord.Interaction):
-        slots = {
-            "tank": self._to_int(self.tanks.value, 1),
-            "healer": self._to_int(self.healers.value, 1),
-            "dps": self._to_int(self.dps.value, 4),
-        }
+        slots = self._parse_roles(self.roles.value)
         if sum(slots.values()) == 0:
             await interaction.response.send_message(
                 "A party needs at least one slot. Try again.", ephemeral=True
             )
             return
+
+        extra = [d.strip() for d in (self.dungeons.value or "").split(",") if d.strip()]
 
         party = Party(
             party_id=secrets.token_hex(3).upper(),
@@ -297,6 +323,8 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             min_gear_score=self._gear_score,
             voice_channel_id=self._voice_channel_id,
             voice_link=self._voice_link,
+            extra_activities=extra,
+            duration_seconds=parse_duration(self.duration.value),
             start_at=parse_start_time(self.start_time.value),
         )
         # Leader auto-joins the first available role.
@@ -318,3 +346,23 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         sent = await interaction.original_response()
         party.message_id = sent.id
         store().save()
+
+        await _notify_queue(interaction, party)
+
+
+async def _notify_queue(interaction: discord.Interaction, party: Party) -> None:
+    """Ping anyone queued for this party's dungeon(s), then clear them."""
+    if _queue is None:
+        return
+    open_roles = {r for r in party.slots if party.open_slots(r) > 0}
+    matched = queue_store().matches(party.guild_id, party.all_activities, open_roles)
+    # Don't ping the party leader about their own party.
+    matched = [e for e in matched if e.user_id != party.leader_id]
+    if not matched:
+        return
+    queue_store().remove_entries(matched)
+    mentions = " ".join(f"<@{uid}>" for uid in dict.fromkeys(e.user_id for e in matched))
+    await interaction.followup.send(
+        f"🔔 {mentions} — a party for **{party.activity}** just formed! Jump in above. ⬆️",
+        allowed_mentions=discord.AllowedMentions(users=True),
+    )
