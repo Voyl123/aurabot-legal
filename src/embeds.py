@@ -17,13 +17,14 @@ from .party import Party
 from .timeparse import humanize_duration
 
 
-def _fill_bar(size: int, capacity: int, width: int = 12) -> str:
-    """A little progress bar, e.g. ``▰▰▰▱▱▱``. One block per slot when it fits."""
+def _fill_bar(size: int, capacity: int, full: bool, width: int = 12) -> str:
+    """A colourful progress bar — one square per slot when it fits."""
     if capacity <= 0:
         return ""
     width = min(capacity, width)
     filled = min(width, round(size / capacity * width))
-    return "▰" * filled + "▱" * (width - filled)
+    block = "🟩" if full else "🟦"
+    return block * filled + "⬜" * (width - filled)
 
 
 def _roster_block(party: Party, role_key: str) -> str:
@@ -57,10 +58,11 @@ def build_party_embed(party: Party) -> discord.Embed:
         color = config.Colors.OPEN
         status = "🟢 **Recruiting**"
 
-    # --- Header: status + fill bar ---------------------------------------- #
+    # --- Header: status pill + colourful fill bar ------------------------- #
+    pct = round(party.size / party.capacity * 100) if party.capacity else 0
     description_lines = [
-        status,
-        f"{_fill_bar(party.size, party.capacity)}  `{party.size}/{party.capacity}`",
+        f"{status}  ·  `{party.size}/{party.capacity}`  ·  **{pct}%**",
+        _fill_bar(party.size, party.capacity, party.is_full),
         "",
     ]
 
@@ -94,7 +96,12 @@ def build_party_embed(party: Party) -> discord.Embed:
         color=color,
         timestamp=dt.datetime.fromtimestamp(party.created_at, tz=dt.timezone.utc),
     )
-    embed.set_author(name=f"Party Finder · led by {party.leader_name}")
+    embed.set_author(
+        name=f"Party Finder · led by {party.leader_name}",
+        icon_url=party.leader_avatar or None,
+    )
+    if party.leader_avatar:
+        embed.set_thumbnail(url=party.leader_avatar)
 
     # --- One column per role ---------------------------------------------- #
     for role_key in config.ROLE_ORDER:
@@ -103,8 +110,9 @@ def build_party_embed(party: Party) -> discord.Embed:
             continue
         role = config.ROLES[role_key]
         filled = len(party.members_for(role_key))
+        check = " ✅" if filled >= total else ""
         embed.add_field(
-            name=f"{role.emoji} {role.label} · {filled}/{total}",
+            name=f"{role.emoji} {role.label} · {filled}/{total}{check}",
             value=_roster_block(party, role_key),
             inline=True,
         )

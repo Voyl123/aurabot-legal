@@ -141,6 +141,24 @@ def test_embed_shows_any_spec_when_unset():
     assert "any spec" in build_party_embed(make_party()).description
 
 
+def test_embed_uses_leader_avatar_as_thumbnail():
+    p = make_party(leader_avatar="https://cdn.example/a.png")
+    embed = build_party_embed(p)
+    assert embed.thumbnail.url == "https://cdn.example/a.png"
+    assert embed.author.icon_url == "https://cdn.example/a.png"
+
+
+def test_embed_shows_percent_and_role_ready_check():
+    p = make_party(slots={"tank": 1, "dps": 1})
+    p.add_or_move(10, "Lead", "tank")  # tank full, 1/2 overall
+    embed = build_party_embed(p)
+    assert "50%" in embed.description
+    tank_field = next(f for f in embed.fields if "Tank" in f.name)
+    assert "✅" in tank_field.name           # full role gets a check
+    dps_field = next(f for f in embed.fields if "DPS" in f.name)
+    assert "✅" not in dps_field.name
+
+
 def test_embed_renders_voice_link_fallback():
     p = make_party(voice_link="https://discord.gg/abcd")
     assert "[Voice](https://discord.gg/abcd)" in build_party_embed(p).description

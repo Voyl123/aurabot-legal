@@ -44,6 +44,7 @@ class Party:
     slots: dict[str, int]
     # Minimum Gear Score / Combat Power (CP) the leader wants applicants to have.
     # ``None`` means no requirement (informational only — not enforced on join).
+    leader_avatar: str | None = None  # URL, used as the card's thumbnail
     min_gear_score: int | None = None
     # Voice channel for the party to gather in. If the leader pastes a same-server
     # channel link/ID we keep the id (rendered as a clickable <#id>); any other URL

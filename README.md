@@ -1,10 +1,12 @@
 # 🎲 D20 — Throne and Liberty Dungeon Party Creator
 
-A Discord bot for **Throne and Liberty** that lets players spin up parties and
-recruit **Tanks 🛡️, Healers 💚 and DPS ⚔️** with a clean, interactive UI —
-buttons to join/leave, a live roster that shows who picked what and what's
-still needed, and a **start time** rendered with Discord's native timestamp
-feature (so everyone sees it in their own timezone, counting down automatically).
+A polished Discord bot for **Throne and Liberty** that turns "anyone up for a dungeon?"
+into a one-click party. Players **spin up parties**, recruit **Tanks 🛡️ · Healers 💚 · DPS ⚔️**,
+and the **queue auto-matches** people the moment a party forms.
+
+Every party is a **live, self-updating card** — a colourful fill bar, each member's
+**class** (from their weapon combo), **Gear Score** and **spec**, plus start/end times in
+**Discord timestamps** so everyone sees their own timezone with a live countdown.
 
 ---
 
@@ -78,10 +80,10 @@ Notes (optional)            : (blank — or e.g. "new players welcome")
 **The party card it posts** (updates live as people join):
 
 ```
-Party Finder · led by Voyl
+🖼️ Party Finder · led by Voyl
 ★★★ T3 · Chapel of Madness
-🟢 Recruiting
-▰▰▱▱▱▱  2/6
+🟢 Recruiting  ·  2/6  ·  33%
+🟦🟦⬜⬜⬜⬜
 🎮 Epic · ⚡ 3,500+ CP · 🧭 DPS · 🔁 3 runs · 🔊 #raid-voice
 🕒 Today 20:00 · in 2 hours   ⏳ Running for 2h · ends in 4 hours
 

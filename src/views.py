@@ -380,6 +380,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             channel_id=interaction.channel_id or 0,
             leader_id=interaction.user.id,
             leader_name=interaction.user.display_name,
+            leader_avatar=str(interaction.user.display_avatar.url),
             activity=self._activity,
             difficulty=self._difficulty,
             notes=(self.notes.value or "").strip(),
@@ -410,7 +411,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         embed = build_party_embed(party)
         view = PartyView()
         await interaction.response.send_message(
-            content="@here a new party is forming! 🎉",
+            content=f"@here 🎉 **New party forming — {party.activity}!**",
             embed=embed,
             view=view,
             allowed_mentions=discord.AllowedMentions(everyone=True),

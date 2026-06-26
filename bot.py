@@ -315,38 +315,42 @@ async def myqueue(interaction: discord.Interaction):
 @bot.tree.command(name="help", description="How to use the party bot.")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="🎲 D20 — Party Creator",
-        description="Find Tanks, Healers and DPS for your Throne and Liberty runs.",
+        title="🎲  D20 — Throne and Liberty Party Finder",
+        description=(
+            "Spin up parties, fill them with **Tanks 🛡️ · Healers 💚 · DPS ⚔️**, "
+            "and let the queue do the matchmaking.\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━"
+        ),
         color=config.Colors.OPEN,
     )
+    if interaction.client.user:
+        embed.set_thumbnail(url=interaction.client.user.display_avatar.url)
     embed.add_field(
-        name="/create",
-        value="Start a party. Pick an activity (raids, T1–T3 dungeons, archbosses…), a "
-              "difficulty, optional **min Gear Score**, **voice link**, **# of runs** and a "
-              "**spec** you need (or leave blank for any). In the form: roles, **start time**, "
-              "how long it's **running for**, **other dungeons**, and notes. Posts a live card.",
+        name="🛠️  `/create`  ·  start a party",
+        value="Activity, difficulty, min **Gear Score**, **voice**, **# runs** and a **spec** "
+              "you need (blank = any). The form adds roles, **start time**, **duration** and "
+              "**extra dungeons**. Posts a live, self-updating card.",
         inline=False,
     )
     embed.add_field(
-        name="/lfg",
-        value="Find parties looking for members. Filter by dungeon and/or the role you play.",
+        name="🔎  `/lfg`  ·  find a group",
+        value="Browse parties looking for members — filter by dungeon and/or the role you play.",
         inline=False,
     )
     embed.add_field(
-        name="/queue · /myqueue · /unqueue",
-        value="`/queue` a specific dungeon **or 🎲 Any dungeon**: see matching parties "
-              "instantly, or get **auto-added when one forms** — longest-queued players "
-              "fill the slots first. `/myqueue` shows your queue; `/unqueue` leaves it.",
+        name="🎟️  `/queue` · `/myqueue` · `/unqueue`",
+        value="Queue a dungeon **or 🎲 Any dungeon**: see matching parties instantly, or get "
+              "**auto-added when one forms** (longest-waited first). `/myqueue` lists yours.",
         inline=False,
     )
     embed.add_field(
-        name="Joining & leaving",
-        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card. You must set your "
-              "**Gear Score**, **weapons** (e.g. `GS / Dagger` → class title *Bladedancer*) and "
-              "one or more **spec preferences** (e.g. `DPS, PvE`) — all shown next to your name. "
-              "Click 🚪 **Leave** any time. The leader can 🔒 **Disband**.",
+        name="⚔️  Joining",
+        value="Tap a role and set your **Gear Score**, **weapons** (`GS / Dagger` → *Bladedancer*) "
+              "and **spec preferences** — all shown by your name. 🚪 **Leave** anytime; the "
+              "leader can 🔒 **Disband**.",
         inline=False,
     )
+    embed.set_footer(text="Times use Discord timestamps — everyone sees their own timezone.")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
