@@ -258,6 +258,28 @@ async def unqueue(interaction: discord.Interaction):
     await interaction.response.send_message(msg, ephemeral=True)
 
 
+@bot.tree.command(name="myqueue", description="See the dungeons you're currently queued for.")
+async def myqueue(interaction: discord.Interaction):
+    entries = queue_store().for_user(interaction.user.id, interaction.guild_id or 0)
+    if not entries:
+        await interaction.response.send_message(
+            "You're not queued for anything. Use `/queue` to join one. 🎟️",
+            ephemeral=True,
+        )
+        return
+    lines = []
+    for e in entries:
+        role = f" — {config.ROLES[e.role].emoji} {config.ROLES[e.role].label}" if e.role else ""
+        lines.append(f"• **{e.activity}**{role}")
+    embed = discord.Embed(
+        title="🎟️ Your queue",
+        description="\n".join(lines),
+        color=config.Colors.ACCENT,
+    )
+    embed.set_footer(text="Use /unqueue to leave them all.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="help", description="How to use the party bot.")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -279,10 +301,10 @@ async def help_command(interaction: discord.Interaction):
         inline=False,
     )
     embed.add_field(
-        name="/queue · /unqueue",
+        name="/queue · /myqueue · /unqueue",
         value="`/queue` a dungeon: if a party's already looking you'll see it instantly — "
               "otherwise you're queued and **pinged the moment a matching party forms**. "
-              "`/unqueue` leaves the queue.",
+              "`/myqueue` shows what you're queued for; `/unqueue` leaves the queue.",
         inline=False,
     )
     embed.add_field(

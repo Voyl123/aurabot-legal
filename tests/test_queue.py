@@ -54,6 +54,14 @@ def test_persistence_roundtrip():
     assert QueueStore(path).for_user(1, 100)[0].activity == "X"
 
 
+def test_for_user_scoped_to_guild():
+    q = _store()
+    q.add(QueueEntry(1, "A", 100, "X", "dps"))
+    q.add(QueueEntry(1, "A", 200, "Y", "tank"))  # different guild
+    mine = q.for_user(1, 100)
+    assert len(mine) == 1 and mine[0].activity == "X"
+
+
 # --------------------------------------------------------------------------- #
 # Create-time notification
 # --------------------------------------------------------------------------- #

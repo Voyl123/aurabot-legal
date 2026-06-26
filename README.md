@@ -63,7 +63,7 @@ Parties and queues persist to `data/*.json`, and the buttons keep working after 
 ### 2. Configure & run
 ```bash
 git clone <this-repo>
-cd d20
+cd <repo-folder>
 
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -81,7 +81,7 @@ an hour the first time).
 ## Project layout
 
 ```
-bot.py                 # entry point, slash commands (/create /lfg /queue /unqueue /help)
+bot.py                 # entry point, slash commands (/create /lfg /queue /myqueue /unqueue /help)
 src/
   config.py            # roles, activity list, colours, difficulties
   party.py             # Party data model + JSON persistence
