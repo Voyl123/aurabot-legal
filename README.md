@@ -58,8 +58,11 @@ Parties and queues persist to `data/*.json`, and the buttons keep working after 
 **Make a party** — pick the dungeon, difficulty, a min Gear Score and paste a voice link:
 
 ```
-/create  activity:★★★ T3 · Chapel of Madness  difficulty:Epic  gear_score:3500  voice:https://discord.com/channels/123/456
+/create  activity:★★★ T3 · Chapel of Madness  difficulty:Epic  gear_score:3500  voice:https://discord.com/channels/123/456  weapons:SnS / Wand
 ```
+
+Your `weapons` become a **class title** automatically — `SnS / Wand` → **Paladin**,
+`GS / Dagger` → **Bladedancer**, `Staff / Wand` → **Sage**, and so on.
 
 …then the pop-up form fills in the rest:
 
@@ -81,11 +84,11 @@ Party Finder · led by Voyl
 🎮 Epic · ⚡ 3,500+ CP · 🔊 #raid-voice
 🕒 Today 20:00 · in 2 hours   ⏳ Running for 2h · ends in 4 hours
 
-🛡️ Tank · 1/1        💚 Healer · 1/1       ⚔️ DPS · 0/4
-👑 Voyl              Mendy · 3,800         + open
-                                           + open
-                                           + open
-                                           + open
+🛡️ Tank · 1/1                 💚 Healer · 1/1               ⚔️ DPS · 0/4
+👑 Voyl · Paladin · 4,000     Mendy · Sage · 3,800         + open
+                                                           + open
+                                                           + open
+                                                           + open
 
 🎯 Also running
 • ★★★ T3 · Rancorwood
@@ -96,7 +99,8 @@ Party #A1B2C3 · tap a role below to join
 [🛡️ Tank] [💚 Healer] [⚔️ DPS]   [🚪 Leave] [🔒 Disband]
 ```
 
-Clicking **⚔️ DPS** asks for your Gear Score, then adds you: `✓ You joined as DPS (Gear Score: 4,100)`.
+Clicking **⚔️ DPS** asks for your Gear Score and weapons, then adds you:
+`✓ You joined as DPS (Gear Score: 4,100 · Bladedancer (GS/Dagger))`.
 
 **Find a group:**
 

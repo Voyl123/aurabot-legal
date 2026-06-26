@@ -10,6 +10,7 @@ import discord
 from . import config
 from .embeds import build_party_embed
 from .party import Party, PartyStore
+from . import weapons as weapons_mod
 from .queues import QueueStore
 from .timeparse import parse_duration, parse_start_time
 
@@ -196,15 +197,26 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
         super().__init__()
         self._party_id = party_id
         self._role_key = role_key
-        # Pre-fill with the player's previously entered score, if any.
-        if existing is not None and existing.gear_score is not None:
-            self.gear_score.default = str(existing.gear_score)
+        # Pre-fill with the player's previous entries, if any.
+        if existing is not None:
+            if existing.gear_score is not None:
+                self.gear_score.default = str(existing.gear_score)
+            if existing.weapons:
+                self.weapons.default = " / ".join(
+                    weapons_mod.ABBR.get(w, w) for w in existing.weapons
+                )
 
     gear_score = discord.ui.TextInput(
         label="Your Gear Score (CP)",
         placeholder="e.g. 4200",
         required=True,
         max_length=6,
+    )
+    weapons = discord.ui.TextInput(
+        label="Your weapons (optional)",
+        placeholder="e.g. GS / Dagger  →  shows as Bladedancer",
+        required=False,
+        max_length=40,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -229,15 +241,21 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
             )
             return
 
+        weps = weapons_mod.parse_weapons(self.weapons.value)
         changed, msg = party.add_or_move(
-            interaction.user.id, interaction.user.display_name, self._role_key, gear_score=gs
+            interaction.user.id, interaction.user.display_name, self._role_key,
+            gear_score=gs, weapons=weps,
         )
         if not changed:
             await interaction.response.send_message(msg, ephemeral=True)
             return
 
         await _rerender_card(interaction.client, party)
-        await interaction.response.send_message(f"{msg} (Gear Score: {gs:,})", ephemeral=True)
+        title = weapons_mod.class_title(weps)
+        extra = f" · {title}" if title else ""
+        await interaction.response.send_message(
+            f"{msg} (Gear Score: {gs:,}{extra})", ephemeral=True
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -245,13 +263,15 @@ class JoinModal(discord.ui.Modal, title="Join Party"):
 # --------------------------------------------------------------------------- #
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     def __init__(self, activity: str, difficulty: str, gear_score: int | None = None,
-                 voice_channel_id: int | None = None, voice_link: str | None = None) -> None:
+                 voice_channel_id: int | None = None, voice_link: str | None = None,
+                 leader_weapons: list[str] | None = None) -> None:
         super().__init__()
         self._activity = activity
         self._difficulty = difficulty
         self._gear_score = gear_score
         self._voice_channel_id = voice_channel_id
         self._voice_link = voice_link
+        self._leader_weapons = leader_weapons or []
 
     # Roles in one field: "Tank/Healer/DPS". Default = classic 1/1/4 six-stack.
     roles = discord.ui.TextInput(
@@ -330,7 +350,10 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         # Leader auto-joins the first available role.
         for role_key in ("tank", "healer", "dps"):
             if slots.get(role_key, 0) > 0:
-                party.add_or_move(interaction.user.id, interaction.user.display_name, role_key)
+                party.add_or_move(
+                    interaction.user.id, interaction.user.display_name, role_key,
+                    weapons=self._leader_weapons,
+                )
                 break
 
         store().add(party)

@@ -22,6 +22,7 @@ except ImportError:  # python-dotenv is optional
 from src import config
 from src.party import PartyStore
 from src.queues import QueueEntry, QueueStore
+from src.weapons import parse_weapons
 from src.views import (
     CreatePartyModal,
     PartyView,
@@ -114,6 +115,7 @@ async def _activity_autocomplete(
     difficulty="Difficulty / vibe of the run",
     gear_score="Minimum Gear Score / Combat Power applicants should have (optional)",
     voice="Paste a voice channel link or ID for the party to gather in (optional)",
+    weapons="Your weapon combo, e.g. GS / Dagger — sets your class title (optional)",
 )
 @app_commands.autocomplete(activity=_activity_autocomplete)
 @app_commands.choices(
@@ -125,6 +127,7 @@ async def create(
     difficulty: app_commands.Choice[str] | None = None,
     gear_score: app_commands.Range[int, 0, 10000] | None = None,
     voice: str | None = None,
+    weapons: str | None = None,
 ):
     diff = difficulty.value if difficulty else "Any"
     voice_channel_id, voice_link = parse_voice(voice)
@@ -136,6 +139,7 @@ async def create(
             gear_score=gear_score,
             voice_channel_id=voice_channel_id,
             voice_link=voice_link,
+            leader_weapons=parse_weapons(weapons),
         )
     )
 
@@ -329,8 +333,9 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="Joining & leaving",
         value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any card — you'll be asked "
-              "for your **Gear Score (CP)**, which shows next to your name. Click 🚪 **Leave** "
-              "any time to drop out. The leader can 🔒 **Disband**.",
+              "for your **Gear Score (CP)** and **weapons** (e.g. `GS / Dagger`), which the "
+              "bot turns into a **class title** (Bladedancer) next to your name. Click 🚪 "
+              "**Leave** any time to drop out. The leader can 🔒 **Disband**.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)

@@ -12,6 +12,7 @@ import datetime as dt
 import discord
 
 from . import config
+from . import weapons as weapons_mod
 from .party import Party
 from .timeparse import humanize_duration
 
@@ -30,8 +31,14 @@ def _roster_block(party: Party, role_key: str) -> str:
     lines: list[str] = []
     for m in party.members_for(role_key):
         crown = "👑 " if m.user_id == party.leader_id else ""
-        gs = f" · `{m.gear_score:,}`" if m.gear_score else ""
-        lines.append(f"{crown}<@{m.user_id}>{gs}")
+        extras = []
+        title = weapons_mod.class_title(m.weapons)
+        if title:
+            extras.append(title)
+        if m.gear_score:
+            extras.append(f"`{m.gear_score:,}`")
+        suffix = (" · " + " · ".join(extras)) if extras else ""
+        lines.append(f"{crown}<@{m.user_id}>{suffix}")
     for _ in range(party.open_slots(role_key)):
         lines.append("`+ open`")
     return "\n".join(lines) if lines else "`—`"

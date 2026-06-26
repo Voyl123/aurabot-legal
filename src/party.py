@@ -26,6 +26,7 @@ class Member:
     display_name: str
     role: str  # one of config.ROLES keys
     gear_score: int | None = None  # the member's own Gear Score / CP
+    weapons: list[str] = field(default_factory=list)  # canonical weapon names
 
 
 @dataclass
@@ -111,7 +112,8 @@ class Party:
 
     # -- mutations ---------------------------------------------------------- #
     def add_or_move(
-        self, user_id: int, display_name: str, role: str, gear_score: int | None = None
+        self, user_id: int, display_name: str, role: str,
+        gear_score: int | None = None, weapons: list[str] | None = None,
     ) -> tuple[bool, str]:
         """Add a member, or move them to a new role.
 
@@ -133,9 +135,11 @@ class Party:
             existing.role = role
             if gear_score is not None:
                 existing.gear_score = gear_score
+            if weapons:
+                existing.weapons = weapons
             return True, f"Moved you to **{config.ROLES[role].label}**."
 
-        self.members.append(Member(user_id, display_name, role, gear_score))
+        self.members.append(Member(user_id, display_name, role, gear_score, weapons or []))
         return True, f"You joined as **{config.ROLES[role].label}**."
 
     def remove(self, user_id: int) -> tuple[bool, str]:
