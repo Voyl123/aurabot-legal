@@ -15,7 +15,8 @@ def _roster_block(party: Party, role_key: str) -> str:
     members = party.members_for(role_key)
     lines: list[str] = []
     for m in members:
-        lines.append(f"`✓` <@{m.user_id}>")
+        gs = f" · `{m.gear_score:,}`" if m.gear_score else ""
+        lines.append(f"`✓` <@{m.user_id}>{gs}")
     # Show empty slots so people can see what's still needed.
     for _ in range(party.open_slots(role_key)):
         lines.append("`○` *open*")
@@ -41,6 +42,8 @@ def build_party_embed(party: Party) -> discord.Embed:
     ]
     if party.min_gear_score:
         description_lines.append(f"**Gear Score:** ⚡ {party.min_gear_score:,}+ CP required")
+    if party.voice_channel_id:
+        description_lines.append(f"**Voice:** 🔊 <#{party.voice_channel_id}>")
     if party.start_at:
         ts = int(party.start_at)
         # Discord timestamp markdown renders in each viewer's local timezone:

@@ -27,11 +27,23 @@ def store() -> PartyStore:
 
 
 async def _refresh(interaction: discord.Interaction, party: Party) -> None:
-    """Re-render the party message after a change."""
+    """Re-render the party message in response to a *component* interaction."""
     store().save()
     embed = build_party_embed(party)
     view = PartyView() if not party.closed else None
     await interaction.response.edit_message(embed=embed, view=view)
+
+
+async def _rerender_card(client: discord.Client, party: Party) -> None:
+    """Edit the party message out-of-band (used after a modal submit, where the
+    interaction isn't attached to the party message)."""
+    store().save()
+    if party.message_id is None:
+        return
+    channel = client.get_channel(party.channel_id) or await client.fetch_channel(party.channel_id)
+    message = await channel.fetch_message(party.message_id)
+    view = PartyView() if not party.closed else None
+    await message.edit(embed=build_party_embed(party), view=view)
 
 
 # --------------------------------------------------------------------------- #
@@ -62,14 +74,16 @@ class PartyView(discord.ui.View):
                 "This party no longer exists.", ephemeral=True
             )
             return
-        changed, msg = party.add_or_move(
-            interaction.user.id, interaction.user.display_name, role_key
-        )
-        if not changed:
-            await interaction.response.send_message(msg, ephemeral=True)
+        # Reject early (before showing the modal) if the role is already full,
+        # unless the user is just confirming the role they already hold.
+        existing = party.find_member(interaction.user.id)
+        if party.open_slots(role_key) <= 0 and not (existing and existing.role == role_key):
+            await interaction.response.send_message(
+                f"All **{config.ROLES[role_key].label}** slots are full.", ephemeral=True
+            )
             return
-        await _refresh(interaction, party)
-        await interaction.followup.send(msg, ephemeral=True)
+        # Ask for the player's Gear Score, then complete the join on submit.
+        await interaction.response.send_modal(JoinModal(party.party_id, role_key, existing))
 
     # -- buttons ------------------------------------------------------------ #
     @discord.ui.button(label="Tank", emoji="🛡️", style=discord.ButtonStyle.primary,
@@ -128,15 +142,79 @@ def _is_manager(interaction: discord.Interaction) -> bool:
     return bool(perms and (perms.manage_messages or perms.administrator))
 
 
+def _parse_gear_score(value: str | None) -> int | None:
+    """Parse a gear-score text input (digits, optionally with commas/spaces)."""
+    if not value:
+        return None
+    cleaned = value.replace(",", "").replace(" ", "").strip()
+    if not cleaned.isdigit():
+        return None
+    return int(cleaned)
+
+
+# --------------------------------------------------------------------------- #
+# Join modal — asks the applicant for their Gear Score
+# --------------------------------------------------------------------------- #
+class JoinModal(discord.ui.Modal, title="Join Party"):
+    def __init__(self, party_id: str, role_key: str, existing) -> None:
+        super().__init__()
+        self._party_id = party_id
+        self._role_key = role_key
+        # Pre-fill with the player's previously entered score, if any.
+        if existing is not None and existing.gear_score is not None:
+            self.gear_score.default = str(existing.gear_score)
+
+    gear_score = discord.ui.TextInput(
+        label="Your Gear Score (CP)",
+        placeholder="e.g. 4200",
+        required=True,
+        max_length=6,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        party = store().get(self._party_id)
+        if party is None or party.closed:
+            await interaction.response.send_message(
+                "This party no longer exists.", ephemeral=True
+            )
+            return
+
+        gs = _parse_gear_score(self.gear_score.value)
+        if gs is None:
+            await interaction.response.send_message(
+                "Please enter your Gear Score as a number, e.g. `4200`.", ephemeral=True
+            )
+            return
+        if party.min_gear_score and gs < party.min_gear_score:
+            await interaction.response.send_message(
+                f"This party requires **{party.min_gear_score:,}+ CP** — yours is "
+                f"**{gs:,}**. Gear up and try again! 💪",
+                ephemeral=True,
+            )
+            return
+
+        changed, msg = party.add_or_move(
+            interaction.user.id, interaction.user.display_name, self._role_key, gear_score=gs
+        )
+        if not changed:
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+
+        await _rerender_card(interaction.client, party)
+        await interaction.response.send_message(f"{msg} (Gear Score: {gs:,})", ephemeral=True)
+
+
 # --------------------------------------------------------------------------- #
 # Create-party modal
 # --------------------------------------------------------------------------- #
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
-    def __init__(self, activity: str, difficulty: str, gear_score: int | None = None) -> None:
+    def __init__(self, activity: str, difficulty: str, gear_score: int | None = None,
+                 voice_channel_id: int | None = None) -> None:
         super().__init__()
         self._activity = activity
         self._difficulty = difficulty
         self._gear_score = gear_score
+        self._voice_channel_id = voice_channel_id
 
     start_time = discord.ui.TextInput(
         label="Start time (optional)",
@@ -192,6 +270,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             notes=(self.notes.value or "").strip(),
             slots=slots,
             min_gear_score=self._gear_score,
+            voice_channel_id=self._voice_channel_id,
             start_at=parse_start_time(self.start_time.value),
         )
         # Leader auto-joins the first available role.

@@ -98,7 +98,22 @@ def test_embed_omits_gear_score_when_unset():
 
 
 def test_gear_score_persists():
-    p = make_party(min_gear_score=3500)
+    p = make_party(min_gear_score=3500, voice_channel_id=12345)
+    p.add_or_move(10, "Leader", "tank", gear_score=4800)
     path = tempfile.mktemp(suffix=".json")
     PartyStore(path).add(p)
-    assert PartyStore(path).get("P1").min_gear_score == 3500
+
+    reloaded = PartyStore(path).get("P1")
+    assert reloaded.min_gear_score == 3500
+    assert reloaded.voice_channel_id == 12345
+    assert reloaded.find_member(10).gear_score == 4800
+
+
+def test_embed_shows_member_gear_score_and_voice():
+    p = make_party(voice_channel_id=999888)
+    p.add_or_move(10, "Leader", "dps", gear_score=4200)
+    embed = build_party_embed(p)
+    # Voice channel mention in the header...
+    assert "<#999888>" in embed.description
+    # ...and the member's gear score somewhere in the roster fields.
+    assert any("4,200" in (f.value or "") for f in embed.fields)

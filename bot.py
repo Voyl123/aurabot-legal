@@ -84,6 +84,7 @@ async def _activity_autocomplete(
     activity="What is the party for? (boss, dungeon, event…)",
     difficulty="Difficulty / vibe of the run",
     gear_score="Minimum Gear Score / Combat Power applicants should have (optional)",
+    voice="Voice channel for the party to gather in (optional)",
 )
 @app_commands.autocomplete(activity=_activity_autocomplete)
 @app_commands.choices(
@@ -94,11 +95,17 @@ async def create(
     activity: str,
     difficulty: app_commands.Choice[str] | None = None,
     gear_score: app_commands.Range[int, 0, 10000] | None = None,
+    voice: discord.VoiceChannel | None = None,
 ):
     diff = difficulty.value if difficulty else "Any"
     # Open the modal to collect slot counts + notes before posting.
     await interaction.response.send_modal(
-        CreatePartyModal(activity=activity, difficulty=diff, gear_score=gear_score)
+        CreatePartyModal(
+            activity=activity,
+            difficulty=diff,
+            gear_score=gear_score,
+            voice_channel_id=voice.id if voice else None,
+        )
     )
 
 
@@ -143,9 +150,9 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="/create",
-        value="Start a new party. Pick an activity (raids, 1★–3★ dungeons, archbosses…), "
-              "a difficulty, and an optional **minimum Gear Score (CP)**. Then set how "
-              "many of each role you need and the bot posts a live party card with join buttons.",
+        value="Start a new party. Pick an activity (raids, T1–T3 dungeons, archbosses…), "
+              "a difficulty, an optional **minimum Gear Score (CP)** and a **voice channel**. "
+              "Then set how many of each role you need and the bot posts a live party card.",
         inline=False,
     )
     embed.add_field(
@@ -155,7 +162,8 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="Joining a party",
-        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any party card. "
+        value="Click 🛡️ **Tank**, 💚 **Healer** or ⚔️ **DPS** on any party card — you'll be "
+              "asked for your **Gear Score (CP)**, which then shows next to your name. "
               "Use 🚪 **Leave** to drop out. The leader can 🔒 **Disband**.",
         inline=False,
     )

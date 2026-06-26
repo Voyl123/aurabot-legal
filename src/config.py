@@ -43,28 +43,28 @@ ACTIVITIES: list[str] = [
     # ---- 12-player Raids -------------------------------------------------- #
     "⚔️ Raid — Altar of Calanthia (12p · 5000+ CP)",
 
-    # ---- 1-Star Co-op Dungeons (1600 CP) ---------------------------------- #
-    "★ Syleus's Abyss (1-Star)",
-    "★ Saurodoma Island (1-Star)",
-    "★ Temple of Slaughter (1-Star)",
-    "★ Butcher's Canyon (1-Star)",
-    "★ Cave of Destruction (1-Star)",
-    "★ Shattered Temple (1-Star)",
+    # ---- T1 · 1-Star Co-op Dungeons (1600 CP) ----------------------------- #
+    "★ T1 · Syleus's Abyss",
+    "★ T1 · Saurodoma Island",
+    "★ T1 · Temple of Slaughter",
+    "★ T1 · Butcher's Canyon",
+    "★ T1 · Cave of Destruction",
+    "★ T1 · Shattered Temple",
 
-    # ---- 2-Star Co-op Dungeons (2500 CP) ---------------------------------- #
-    "★★ Carmine Rage Island (2-Star)",
-    "★★ Island of Terror (2-Star)",
-    "★★ Valley of Slaughter (2-Star)",
-    "★★ Voidwastes (2-Star)",
-    "★★ Torture Chamber of Screams (2-Star)",
+    # ---- T2 · 2-Star Co-op Dungeons (2500 CP) ----------------------------- #
+    "★★ T2 · Carmine Rage Island",
+    "★★ T2 · Island of Terror",
+    "★★ T2 · Valley of Slaughter",
+    "★★ T2 · Voidwastes",
+    "★★ T2 · Torture Chamber of Screams",
 
-    # ---- 3-Star Co-op Dungeons (3500 CP · Lv55) --------------------------- #
-    "★★★ Tyrant's Isle (3-Star)",
-    "★★★ Twisted Laboratory (3-Star)",
-    "★★★ Rancorwood (3-Star)",
-    "★★★ Halls of Tragedy (3-Star)",
-    "★★★ Chapel of Madness (3-Star)",
-    "★★★ Doomrot Grove (3-Star)",
+    # ---- T3 · 3-Star Co-op Dungeons (3500 CP · Lv55) ---------------------- #
+    "★★★ T3 · Tyrant's Isle",
+    "★★★ T3 · Twisted Laboratory",
+    "★★★ T3 · Rancorwood",
+    "★★★ T3 · Halls of Tragedy",
+    "★★★ T3 · Chapel of Madness",
+    "★★★ T3 · Doomrot Grove",
 
     # ---- Endgame Co-op (5500 CP) ------------------------------------------ #
     "🔥 Hellfire Crucible (5500 CP)",

@@ -25,6 +25,7 @@ class Member:
     user_id: int
     display_name: str
     role: str  # one of config.ROLES keys
+    gear_score: int | None = None  # the member's own Gear Score / CP
 
 
 @dataclass
@@ -42,6 +43,8 @@ class Party:
     # Minimum Gear Score / Combat Power (CP) the leader wants applicants to have.
     # ``None`` means no requirement (informational only — not enforced on join).
     min_gear_score: int | None = None
+    # Voice channel for the party to gather in (rendered as a clickable <#id>).
+    voice_channel_id: int | None = None
     members: list[Member] = field(default_factory=list)
     message_id: int | None = None
     created_at: float = field(default_factory=time.time)
@@ -71,7 +74,9 @@ class Party:
         return next((m for m in self.members if m.user_id == user_id), None)
 
     # -- mutations ---------------------------------------------------------- #
-    def add_or_move(self, user_id: int, display_name: str, role: str) -> tuple[bool, str]:
+    def add_or_move(
+        self, user_id: int, display_name: str, role: str, gear_score: int | None = None
+    ) -> tuple[bool, str]:
         """Add a member, or move them to a new role.
 
         Returns ``(changed, message)``.
@@ -90,9 +95,11 @@ class Party:
 
         if existing:
             existing.role = role
+            if gear_score is not None:
+                existing.gear_score = gear_score
             return True, f"Moved you to **{config.ROLES[role].label}**."
 
-        self.members.append(Member(user_id, display_name, role))
+        self.members.append(Member(user_id, display_name, role, gear_score))
         return True, f"You joined as **{config.ROLES[role].label}**."
 
     def remove(self, user_id: int) -> tuple[bool, str]:
