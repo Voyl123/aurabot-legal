@@ -1,0 +1,10 @@
+# Never commit ROMs or generated hacks (copyright)
+*.gba
+*.gb
+*.gbc
+*.ips
+*.bps
+
+__pycache__/
+*.pyc
+.pytest_cache/
