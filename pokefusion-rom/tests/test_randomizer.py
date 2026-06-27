@@ -73,3 +73,23 @@ def test_legendary_evos_wires_new_stage(fake_rom):
 def test_legendary_evos_off_by_default(fake_rom):
     run(fake_rom, seed=7)
     assert not fake_rom.read_evolutions(144)[0].is_real
+
+
+def test_null_learnset_pointer_never_writes_to_offset_zero(fake_rom):
+    # Some real species (e.g. internal #411) have a NULL learnset pointer.
+    # Dereferencing it would write into the ROM header at offset 0 and brick it.
+    fake_rom.set_learnset_pointer(9, 0)            # force a null pointer
+    before = bytes(fake_rom.data[0:16])
+    assert fake_rom.read_learnset(9) == []         # reads as empty, not garbage
+    written = fake_rom.inject_learnset_moves(9, [52, 55])
+    assert written == 0                            # injection skipped
+    assert bytes(fake_rom.data[0:16]) == before    # header untouched
+
+
+def test_run_never_corrupts_header(fake_rom):
+    # End-to-end: even with a species carrying a null learnset pointer, a full
+    # run must leave the 0x00..0xC0 boot/header region untouched.
+    fake_rom.set_learnset_pointer(6, 0)
+    header_before = bytes(fake_rom.data[0:0xC0])
+    run(fake_rom, seed=42, legendary_evos=True)
+    assert bytes(fake_rom.data[0:0xC0]) == header_before

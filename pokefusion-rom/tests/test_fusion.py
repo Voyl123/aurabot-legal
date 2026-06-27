@@ -73,6 +73,19 @@ def test_fuse_family_moves_match_types_and_grow():
     assert fire.index(stages[2].moves[0]) >= fire.index(stages[0].moves[0])
 
 
+def test_fuse_family_stage_names_are_unique():
+    # CHARMANDER and CHARMELEON share a 5-char prefix → naive portmanteau would
+    # collide; the engine must lengthen the root so each stage is distinct.
+    fam = _line(
+        Mon(4, "CHARMANDER", (T["Fire"],)),
+        Mon(5, "CHARMELEON", (T["Fire"],)),
+        Mon(6, "CHARIZARD", (T["Fire"], T["Flying"])),
+    )
+    partner = Mon(79, "SLOWPOKE", (T["Water"], T["Psychic"]))
+    names = [s.name for s in fuse_family(fam, partner)]
+    assert len(set(names)) == len(names), names
+
+
 def test_fuse_single_stage_legendary():
     fam = _line(Mon(144, "ARTICUNO", (T["Ice"], T["Flying"])))
     partner = Mon(150, "MEWTWO", (T["Psychic"],))

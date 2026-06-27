@@ -90,10 +90,13 @@ def fuse_family(family: list[Mon], partner: Mon) -> list[FusedStage]:
         raise ValueError("family must have at least one stage")
     types = fuse_types(family, partner)
     stages: list[FusedStage] = []
+    taken: set[str] = set()   # keep stage names distinct within the family
     for i, mon in enumerate(family):
+        name = pokedata.unique_portmanteau(mon.name, partner.name, taken)
+        taken.add(name)
         stages.append(FusedStage(
             species=mon.species,
-            name=pokedata.portmanteau(mon.name, partner.name),
+            name=name,
             types=types,
             moves=_stage_moves(types, power_rank=i),
         ))

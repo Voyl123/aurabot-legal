@@ -47,11 +47,14 @@ def signature_move(type_name: str, power_rank: int) -> int | None:
 # --------------------------------------------------------------------------- #
 # Name fragment helpers — build readable portmanteau fusion names
 # --------------------------------------------------------------------------- #
-def name_head(name: str) -> str:
-    """The leading fragment of a name (Title-cased), e.g. ``BULBASAUR`` → ``Bulba``."""
+def name_head(name: str, head_chars: int | None = None) -> str:
+    """The leading fragment of a name (Title-cased), e.g. ``BULBASAUR`` → ``Bulba``.
+
+    ``head_chars`` overrides the default half-length cut — used to lengthen the
+    root until sibling evolution stages get distinct fused names."""
     n = name.strip().title()
-    cut = max(2, (len(n) + 1) // 2)
-    return n[:cut]
+    cut = head_chars if head_chars is not None else max(2, (len(n) + 1) // 2)
+    return n[:max(2, cut)]
 
 
 def name_tail(name: str) -> str:
@@ -61,11 +64,31 @@ def name_tail(name: str) -> str:
     return n[cut:] or n[-2:]
 
 
-def portmanteau(head_name: str, tail_name: str, max_len: int = 10) -> str:
+def portmanteau(head_name: str, tail_name: str, max_len: int = 10,
+                head_chars: int | None = None) -> str:
     """Fuse two names: front of ``head_name`` + back of ``tail_name``.
 
     Capped at ``max_len`` (FireRed names hold 10 characters).
     """
-    fused = name_head(head_name) + name_tail(tail_name)
+    fused = name_head(head_name, head_chars) + name_tail(tail_name)
     fused = fused[:max_len]
     return fused or head_name[:max_len].title()
+
+
+def unique_portmanteau(head_name: str, tail_name: str, taken: set[str],
+                       max_len: int = 10) -> str:
+    """A portmanteau that avoids names already in ``taken``.
+
+    Lengthens the head root one character at a time (the part that distinguishes
+    sibling evolution stages, e.g. CHAR**M**ANDER vs CHAR**M**ELEON) until the
+    fused name is unique; falls back to a numeric suffix if it still collides.
+    """
+    for head_chars in range(max(2, (len(head_name) + 1) // 2), len(head_name) + 1):
+        cand = portmanteau(head_name, tail_name, max_len, head_chars)
+        if cand and cand not in taken:
+            return cand
+    base = portmanteau(head_name, tail_name, max_len - 1)
+    n = 2
+    while f"{base}{n}"[:max_len] in taken:
+        n += 1
+    return f"{base}{n}"[:max_len]

@@ -102,13 +102,27 @@ class Rom:
             self.data[off:off + romspec.EVOLUTION_ENTRY] = evo.pack()
 
     # --- learnsets -------------------------------------------------------- #
+    # Some species (e.g. internal #411, Chimecho) carry a NULL learnset pointer
+    # in a clean ROM. A null/garbage pointer dereferences to offset 0 — writing
+    # there corrupts the ROM's entry point and bricks it. Treat anything that
+    # doesn't land in real ROM data as "no learnset".
+    _MIN_LEARNSET_OFFSET = 0x200
+
     def _learnset_offset(self, species: int) -> int:
         ptr_off = romspec.LEARNSET_TABLE_OFFSET + species * romspec.LEARNSET_POINTER_ENTRY
         ptr = struct.unpack("<I", self.data[ptr_off:ptr_off + 4])[0]
         return romspec.ptr_to_offset(ptr)
 
+    def _has_learnset(self, species: int) -> bool:
+        off = self._learnset_offset(species)
+        return self._MIN_LEARNSET_OFFSET <= off < len(self.data)
+
     def read_learnset(self, species: int) -> list[tuple[int, int]]:
-        """Return ``[(level, move_id), …]`` from a species' level-up learnset."""
+        """Return ``[(level, move_id), …]`` from a species' level-up learnset.
+
+        Returns ``[]`` for species whose learnset pointer is null/invalid."""
+        if not self._has_learnset(species):
+            return []
         off = self._learnset_offset(species)
         out: list[tuple[int, int]] = []
         while True:
@@ -129,9 +143,12 @@ class Rom:
         """Overwrite the move id of the first entries with ``move_ids`` in place.
 
         Levels are preserved; the list never grows (so no repointing/free-space
-        hunting is needed and the diff stays clean). Returns how many entries
-        were rewritten.
+        hunting is needed and the diff stays clean). Species with a null/invalid
+        learnset pointer are skipped (returns 0) so we never write through a bad
+        pointer and corrupt the ROM. Returns how many entries were rewritten.
         """
+        if not self._has_learnset(species):
+            return 0
         off = self._learnset_offset(species)
         written = 0
         for move in move_ids:
