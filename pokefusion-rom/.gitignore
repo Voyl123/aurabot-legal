@@ -1,9 +1,12 @@
-# Never commit ROMs or generated hacks (copyright)
+# Never commit ROMs (copyright). Patches are OK — they hold only the diff.
 *.gba
 *.gb
 *.gbc
 *.ips
 *.bps
+
+# …except the curated pre-built patches in dist/ (no base-game data).
+!dist/*.ips
 
 __pycache__/
 *.pyc
