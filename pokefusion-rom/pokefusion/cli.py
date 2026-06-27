@@ -34,9 +34,12 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="RNG seed for reproducible fusions (default: random)")
     p.add_argument("--out", help="write the patched ROM here (e.g. fused.gba)")
     p.add_argument("--ips", help="write an IPS patch here (e.g. fused.ips)")
+    p.add_argument("--sprites", action="store_true",
+                   help="generate bitmap-merged fusion sprites + inverted-shiny "
+                        "palettes for every fused species (slower; larger patch)")
     p.add_argument("--legendary-evos", action="store_true",
                    help="EXPERIMENTAL: give legendaries extra evolution stages "
-                        "in unused species slots (graphics will be glitchy)")
+                        "in unused species slots (pair with --sprites for art)")
     p.add_argument("--dump-families", action="store_true",
                    help="list detected evolution families and exit (no changes)")
     p.add_argument("--no-validate", action="store_true",
@@ -62,7 +65,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     original = bytes(rom.data)
-    report = run(rom, seed=args.seed, legendary_evos=args.legendary_evos)
+    report = run(rom, seed=args.seed, legendary_evos=args.legendary_evos,
+                 sprites=args.sprites)
 
     print(f"Fused {len(report)} families (seed={args.seed}).")
     for line in report[:12]:  # a short preview

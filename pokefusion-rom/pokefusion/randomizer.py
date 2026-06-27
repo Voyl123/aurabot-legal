@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from . import romspec
 from .fusion import Mon, FusedStage, fuse_family
 from .rom import Rom
+from .spritefuse import SpriteFuser
 from .structs import BaseStats, Evolution
 
 # A 1-stage family at or above this base-stat total is treated as a legendary
@@ -134,12 +135,18 @@ def _grow_legendary(rom: Rom, legend: Mon, base_stage: FusedStage,
     return created
 
 
-def run(rom: Rom, seed: int | None = None, *, legendary_evos: bool = False) -> list[FusedLine]:
-    """Fuse every family in ``rom`` in place. Returns a report of what changed."""
+def run(rom: Rom, seed: int | None = None, *, legendary_evos: bool = False,
+        sprites: bool = False) -> list[FusedLine]:
+    """Fuse every family in ``rom`` in place. Returns a report of what changed.
+
+    With ``sprites=True`` each fused species also gets a bitmap-merged sprite
+    (partner head over its body) and an inverted-shiny palette.
+    """
     rng = random.Random(seed)
     families = detect_families(rom)
     roots = [fam[0] for fam in families]
     free_slots = list(range(romspec.FIRST_UNUSED_SLOT, romspec.LAST_UNUSED_SLOT + 1))
+    fuser = SpriteFuser(rom) if sprites else None
 
     report: list[FusedLine] = []
     for fam in families:
@@ -147,9 +154,14 @@ def run(rom: Rom, seed: int | None = None, *, legendary_evos: bool = False) -> l
         stages = fuse_family(fam, partner)
         for stage in stages:
             _apply_stage(rom, stage)
+            if fuser is not None:
+                fuser.fuse(stage.species, partner.species)
 
         extra: list[tuple[int, str, tuple[int, ...]]] = []
         if legendary_evos and len(fam) == 1 and fam[0].bst >= LEGENDARY_BST and free_slots:
             extra = _grow_legendary(rom, fam[0], stages[0], free_slots)
+            if fuser is not None:
+                for slot, _name, _types in extra:
+                    fuser.fuse(slot, partner.species)
         report.append(FusedLine(partner=partner.name, stages=stages, extra_evos=extra))
     return report

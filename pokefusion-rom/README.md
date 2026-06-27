@@ -66,6 +66,7 @@ python -m pokefusion --rom path/to/firered.gba --dump-families
 | `--seed N` | RNG seed for reproducible fusions (default: random) |
 | `--out PATH` | write the patched ROM here |
 | `--ips PATH` | write an IPS patch here (diff vs. the input ROM) |
+| `--sprites` | generate bitmap-merged fusion sprites + inverted-shiny palettes for every fused species (see below) |
 | `--legendary-evos` | **experimental** — give legendaries extra evolution stages (see below) |
 | `--dump-families` | list detected families and exit, changing nothing |
 | `--no-validate` | skip the ROM identity/MD5 check (not recommended) |
@@ -76,6 +77,25 @@ python -m pokefusion --rom path/to/firered.gba --dump-families
   clean FireRed ROM with a patcher like **Flips** or **Lunar IPS**.
 
 ---
+
+## Custom sprites & shinies (`--sprites`)
+
+With `--sprites`, every fused species gets a freshly generated **bitmap-merged
+sprite** instead of reusing the base sprite: the partner's head (top rows) is
+composited over the species' body, both front and back, then the merged colours
+are quantised to a shared 16-colour palette. Each species also gets a custom
+**inverted-shiny** palette (the fused palette with its colours inverted — green
+mon → magenta shiny).
+
+```
+python -m pokefusion --rom firered.gba --seed 42 --sprites --out fused.gba --ips fused.ips
+```
+
+New sprite/palette blobs are LZ77-compressed and appended to the ROM's free
+space (~6 MiB available), and the front/back/normal/shiny tables are repointed.
+The GBA header is left untouched, so the ROM still boots. Pairs with
+`--legendary-evos` to give the generated legendary stages real merged art in
+their otherwise-empty species slots.
 
 ## Supported ROM
 
@@ -93,10 +113,10 @@ fails loudly instead of corrupting output.
   Fairy.
 * **`--legendary-evos` is experimental.** A binary patch can't cleanly add brand
   new Pokédex species, so generated legendary evolutions reuse FireRed's unused
-  species slots (252–276). Their **stats, types, name, evolution and learnset
-  are wired up and valid**, but those slots have **no sprites/Pokédex data**, so
-  they'll look glitchy in-game. Adding fully-fledged new species needs a
-  decompilation build (pret `pokefirered`), which is out of scope here.
+  species slots (252–276). Their stats, types, name, evolution and learnset are
+  wired up and valid; with `--sprites` they also get merged battle art. They
+  still have no Pokédex entry/cry, so those remain placeholder. Fully-fledged
+  new species need a decompilation build (pret `pokefirered`), out of scope here.
 * Moves are injected by overwriting a species' earliest level-up moves (levels
   preserved), so learnsets never need to grow/relocate.
 

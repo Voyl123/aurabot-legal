@@ -55,6 +55,20 @@ NAME_LENGTH = 11                   # 10 chars + EOS
 LEARNSET_TABLE_OFFSET = 0x25D7B8   # gLevelUpLearnsets[] — 4-byte pointers
 LEARNSET_POINTER_ENTRY = 4
 
+# --- Sprite / palette tables (verified by species-tag signature scan) ----- #
+# Front/back pic entries: {u32 data_ptr; u16 uncompressed_size; u16 species_tag}
+# Palette entries:        {u32 data_ptr; u16 species_tag; u16 padding}
+FRONT_PIC_TABLE = 0x2350AC
+BACK_PIC_TABLE = 0x23654C
+PALETTE_TABLE = 0x23730C
+SHINY_PALETTE_TABLE = 0x239A1C
+GFX_ENTRY = 8
+
+# Large run of 0xFF free space in this ROM (6 MiB), where new compressed
+# sprite/palette blobs are appended. Validated as 0xFF before use.
+FREE_SPACE_START = 0x71A240
+FREE_SPACE_END = 0xCFFFFF      # stay clear of the second data block at ~0xEB0000
+
 # --- Evolution method ids (subset we care about) -------------------------- #
 EVO_NONE = 0x0000
 EVO_LEVEL = 4                       # plain level-up evolution

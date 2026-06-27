@@ -23,6 +23,7 @@ class RomError(Exception):
 class Rom:
     def __init__(self, data: bytes) -> None:
         self.data = bytearray(data)
+        self._alloc = romspec.FREE_SPACE_START  # bump pointer for new gfx blobs
 
     # --- load / save ------------------------------------------------------ #
     @classmethod
@@ -161,3 +162,39 @@ class Rom:
             off += 2
             written += 1
         return written
+
+    # --- graphics: free-space allocation + sprite/palette repointing ------ #
+    def _alloc_write(self, blob: bytes) -> int:
+        """Append ``blob`` to ROM free space (4-byte aligned); return its offset."""
+        off = (self._alloc + 3) & ~3
+        end = off + len(blob)
+        if end > romspec.FREE_SPACE_END:
+            raise RomError("ran out of free space for sprite/palette data")
+        self.data[off:end] = blob
+        self._alloc = end
+        return off
+
+    def _gfx_ptr_offset(self, table: int, species: int) -> int:
+        return table + species * romspec.GFX_ENTRY
+
+    def gfx_pointer(self, table: int, species: int) -> int:
+        po = self._gfx_ptr_offset(table, species)
+        return romspec.ptr_to_offset(struct.unpack("<I", self.data[po:po + 4])[0])
+
+    def has_valid_gfx(self, table: int, species: int) -> bool:
+        """True if the table entry points at an LZ77 blob (header byte 0x10)."""
+        off = self.gfx_pointer(table, species)
+        return 0x200 <= off < len(self.data) and self.data[off] == 0x10
+
+    def read_gfx(self, table: int, species: int) -> bytes:
+        """Decompress the blob a sprite/palette table entry points at."""
+        from . import lz77
+        return lz77.decompress(self.data, self.gfx_pointer(table, species))
+
+    def write_gfx(self, table: int, species: int, raw: bytes) -> None:
+        """Compress ``raw``, append it to free space, and repoint the entry
+        (the entry's size/tag fields are left untouched)."""
+        from . import lz77
+        new_off = self._alloc_write(lz77.compress(raw))
+        po = self._gfx_ptr_offset(table, species)
+        self.data[po:po + 4] = struct.pack("<I", romspec.offset_to_ptr(new_off))
